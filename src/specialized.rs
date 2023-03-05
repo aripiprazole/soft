@@ -13,7 +13,6 @@ pub enum Term {
     App(Box<Term>, Vec<Term>),
     Closure(Vec<(String, Term)>, Box<Term>),
     EnvRef(Box<Term>, String),
-    // Binop(Operator, Box<Term>, Box<Term>),
     Set(String, IsMacro, Box<Term>),
     Call(u64, Vec<Term>),
     LocalRef(String),
@@ -23,23 +22,6 @@ pub enum Term {
     Nil,
 }
 
-// pub enum Operator {
-//     Add, // +
-//     Sub, // -
-//     Mul, // *
-//     Div, // /
-//     Mod, // %
-//     Eq,  // ==
-//     Neq, // !=
-//     Lt,  // <
-//     Gt,  // >
-//     Lte, // <=
-//     Gte, // >=
-//     And, // &&
-//     Or,  // ||
-//     Not, // !
-// }
-
 impl Term {
     pub fn specialize(value: ValueRef) -> Term {
         if value.is_num() {
@@ -48,24 +30,23 @@ impl Term {
 
         match value.to_value() {
             Value::Cons(head, tail) if head.is_num() => {
-                let arguments = cons_to_list(*tail);
-                Term::App(box Term::specialize(*head), arguments)
+                let args = cons_to_list(*tail);
+                Term::App(box Term::specialize(*head), args)
             }
             Value::Cons(head, tail) => {
-                let arguments = cons_to_list(*tail);
+                let args = cons_to_list(*tail);
                 match head.to_value() {
-                    Value::Atom(symbol) => Term::specialize_cons(symbol, arguments),
-                    _ => Term::App(box Term::specialize(*head), arguments),
+                    Value::Atom(symbol) => Term::specialize_cons(symbol, args),
+                    _ => Term::App(box Term::specialize(*head), args),
                 }
             }
             Value::Atom(symbol) => Term::GlobalRef(symbol.clone()),
-            Value::Quote(value_ref) => Term::Quote(box Term::specialize(*value_ref)),
             Value::Nil => Term::Nil,
         }
     }
 
-    fn specialize_cons(head: &String, tail: Vec<Term>) -> Term {
-        match head.as_str() {
+    fn specialize_cons(head: &str, tail: Vec<Term>) -> Term {
+        match head {
             "set*" => match tail.as_slice() {
                 [Term::GlobalRef(name), value] => {
                     Term::Set(name.clone(), IsMacro::No, box value.clone())
@@ -114,7 +95,7 @@ impl Term {
                 [value] => Term::Quote(box value.clone()),
                 _ => todo!(),
             },
-            _ => Term::App(box Term::GlobalRef(head.clone()), tail),
+            _ => Term::App(box Term::GlobalRef(head.to_owned()), tail),
         }
     }
 }
