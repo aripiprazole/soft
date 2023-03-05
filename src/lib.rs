@@ -1,5 +1,7 @@
 pub mod repl;
 pub mod runtime;
+pub mod specialized;
+pub mod util;
 
 #[macro_use]
 extern crate lalrpop_util;
