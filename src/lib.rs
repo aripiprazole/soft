@@ -1,3 +1,4 @@
+pub mod repl;
 pub mod runtime;
 
 #[macro_use]
