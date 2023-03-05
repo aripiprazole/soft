@@ -16,7 +16,7 @@ pub enum Term {
     // Binop(Operator, Box<Term>, Box<Term>),
     Set(String, IsMacro, Box<Term>),
     Call(u64, Vec<Term>),
-    LocalRef(u64),
+    LocalRef(String),
     GlobalRef(String),
     Num(u64),
     Quote(Box<Term>),

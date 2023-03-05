@@ -7,7 +7,6 @@ pub fn convert_closure(env: &mut Vec<String>, closure: Term) -> Term {
         Term::Quote(quoted) => Term::Quote(box convert_closure(env, *quoted)),
         Term::EnvRef(env_value, index) => Term::EnvRef(box convert_closure(env, *env_value), index),
         Term::Set(name, is_macro, value) => {
-            env.push(name.clone());
             Term::Set(name, is_macro, box convert_closure(env, *value))
         }
         Term::Call(address, args) => Term::Call(
