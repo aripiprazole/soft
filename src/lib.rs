@@ -1,3 +1,5 @@
+#![feature(box_patterns)]
+
 pub mod repl;
 pub mod runtime;
 pub mod specialized;

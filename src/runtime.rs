@@ -41,7 +41,7 @@ impl Display for ValueRef {
     }
 }
 
-#[derive(Eq)]
+#[derive(Eq, Clone, Copy)]
 pub struct ValueRef(u64);
 
 impl ValueRef {
