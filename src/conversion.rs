@@ -40,14 +40,14 @@ pub fn convert_closure(env: &mut Vec<String>, subst: HashMap<String, Term>, clos
                 subst.remove(name);
             }
 
-            let fv = free_vars(env, &body);
+            let fv = free_vars(&mut vec![], &body);
 
             let closure_refs = env
                 .iter()
                 .cloned()
                 .collect::<HashSet<String>>()
                 .relative_complement(args.iter().cloned().collect())
-                .relative_complement(fv);
+                .intersection(fv);
 
             let new_subst = closure_refs
                 .iter()
@@ -107,7 +107,7 @@ fn free_vars(env: &mut Vec<String>, term: &Term) -> im::HashSet<String> {
         Term::Set(_, _, value) => free_vars(env, value),
         Term::Call(_, args) => args.iter().flat_map(|arg| free_vars(env, arg)).collect(),
         Term::Quote(quoted) => free_vars(env, quoted),
-        Term::GlobalRef(name) if !env.contains(&name) => HashSet::from_iter([name.clone()]),
+        Term::GlobalRef(name) => HashSet::from_iter([name.clone()]),
         Term::App(callee, args) => args
             .iter()
             .flat_map(|arg| free_vars(env, arg))
