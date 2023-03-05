@@ -47,17 +47,17 @@ impl Term {
         match value.to_value() {
             Value::Cons(head, tail) if head.is_num() => {
                 let arguments = cons_to_list(*tail);
-                Term::App(Box::new(Term::specialize(*head)), arguments)
+                Term::App(box Term::specialize(*head), arguments)
             }
             Value::Cons(head, tail) => {
                 let arguments = cons_to_list(*tail);
                 match head.to_value() {
                     Value::Atom(symbol) => Term::specialize_cons(symbol, arguments),
-                    _ => Term::App(Box::new(Term::specialize(*head)), arguments),
+                    _ => Term::App(box Term::specialize(*head), arguments),
                 }
             }
             Value::Atom(symbol) => Term::GlobalRef(symbol.clone()),
-            Value::Quote(value_ref) => Term::Quote(Box::new(Term::specialize(*value_ref))),
+            Value::Quote(value_ref) => Term::Quote(box Term::specialize(*value_ref)),
             Value::Nil => Term::Nil,
         }
     }
@@ -66,12 +66,12 @@ impl Term {
         match head.as_str() {
             "set*" => match tail.as_slice() {
                 [Term::GlobalRef(name), value] => {
-                    Term::Set(name.clone(), IsMacro::No, Box::new(value.clone()))
+                    Term::Set(name.clone(), IsMacro::No, box value.clone())
                 }
                 _ => todo!(),
             },
             "lambda" => match tail.as_slice() {
-                [Term::Nil, body] => Term::Lam(Lifted::No, vec![], Box::new(body.clone())),
+                [Term::Nil, body] => Term::Lam(Lifted::No, vec![], box body.clone()),
                 [Term::App(head, args), body] => {
                     let arguments = vec![*head.clone()]
                         .iter()
@@ -82,7 +82,7 @@ impl Term {
                         })
                         .collect();
 
-                    Term::Lam(Lifted::No, arguments, Box::new(body.clone()))
+                    Term::Lam(Lifted::No, arguments, box body.clone())
                 }
                 _ => todo!(),
             },
@@ -104,15 +104,15 @@ impl Term {
                         })
                         .collect();
 
-                    Term::Let(bindings, Box::new(body.clone()))
+                    Term::Let(bindings, box body.clone())
                 }
                 _ => todo!(),
             },
             "quote" => match tail.as_slice() {
-                [value] => Term::Quote(Box::new(value.clone())),
+                [value] => Term::Quote(box value.clone()),
                 _ => todo!(),
             },
-            _ => Term::App(Box::new(Term::GlobalRef(head.clone())), tail),
+            _ => Term::App(box Term::GlobalRef(head.clone()), tail),
         }
     }
 }
@@ -141,7 +141,7 @@ mod tests {
             ValueRef::cons(ValueRef::new_num(2), ValueRef::nil()),
         );
 
-        let term = Term::App(Box::new(Term::Num(1)), vec![Term::Num(2)]);
+        let term = Term::App(box Term::Num(1), vec![Term::Num(2)]);
 
         assert_eq!(Term::specialize(value), term);
     }
@@ -153,7 +153,7 @@ mod tests {
             ValueRef::cons(ValueRef::new_num(1), ValueRef::nil()),
         );
 
-        let term = Term::App(Box::new(Term::Nil), vec![Term::Num(1)]);
+        let term = Term::App(box Term::Nil, vec![Term::Num(1)]);
 
         assert_eq!(Term::specialize(value), term);
     }
@@ -168,7 +168,7 @@ mod tests {
             ),
         );
 
-        let term = Term::Set("n".to_string(), IsMacro::No, Box::new(Term::Num(1)));
+        let term = Term::Set("n".to_string(), IsMacro::No, box Term::Num(1));
 
         assert_eq!(Term::specialize(value), term);
     }
@@ -183,7 +183,7 @@ mod tests {
             ),
         );
 
-        let term = Term::Lam(Lifted::No, vec![], Box::new(Term::Num(1)));
+        let term = Term::Lam(Lifted::No, vec![], box Term::Num(1));
 
         assert_eq!(Term::specialize(value), term);
     }
@@ -204,7 +204,7 @@ mod tests {
         let term = Term::Lam(
             Lifted::No,
             vec!["n".to_string(), "m".to_string()],
-            Box::new(Term::Num(1)),
+            box Term::Num(1),
         );
 
         assert_eq!(Term::specialize(value), term);
@@ -226,10 +226,7 @@ mod tests {
             ),
         );
 
-        let term = Term::Let(
-            vec![("n".to_string(), Term::Num(1))],
-            Box::new(Term::Num(1)),
-        );
+        let term = Term::Let(vec![("n".to_string(), Term::Num(1))], box Term::Num(1));
 
         assert_eq!(Term::specialize(value), term);
     }
@@ -241,7 +238,7 @@ mod tests {
             ValueRef::cons(ValueRef::atom("foo".to_string()), ValueRef::nil()),
         );
 
-        let term = Term::Quote(Box::new(Term::GlobalRef("foo".to_string())));
+        let term = Term::Quote(box Term::GlobalRef("foo".to_string()));
 
         assert_eq!(Term::specialize(value), term);
     }
