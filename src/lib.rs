@@ -1,4 +1,4 @@
-#![feature(box_patterns)]
+#![feature(box_syntax, box_patterns)]
 
 pub mod repl;
 pub mod runtime;
