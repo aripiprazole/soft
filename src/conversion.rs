@@ -78,13 +78,13 @@ mod tests {
             Lifted::Yes,
             vec!["a".to_string()],
             box Term::Closure(
-                vec![Term::LocalRef(0)],
+                vec![Term::LocalRef("a".to_string())],
                 box Term::Lam(
                     Lifted::Yes,
                     vec!["env".to_string(), "b".to_string()],
                     box Term::App(
-                        box Term::EnvRef(box Term::LocalRef(0), 0),
-                        vec![Term::LocalRef(1)],
+                        box Term::EnvRef(box Term::LocalRef("env".to_string()), "a".to_string()),
+                        vec![Term::LocalRef("b".to_string())],
                     ),
                 ),
             ),
