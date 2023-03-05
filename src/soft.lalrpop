@@ -11,4 +11,4 @@ pub Term: ValueRef = {
 };
 
 Num: u64 = <s:r"[0-9]+"> => u64::from_str(s).unwrap();
-Id: String = <s:r"[^()\r\n\t0-9 ][^()\r\n\t ]*"> => s.to_string();
+Id: String = <s:r"[^()\r\n\t0-9' ][^()\r\n\t' ]*"> => s.to_string();

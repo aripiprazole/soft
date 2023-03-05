@@ -1,5 +1,47 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum Value {
+    Cons(ValueRef, ValueRef),
+    Atom(String),
+    Quote(ValueRef),
+    Nil,
+}
+
+impl PartialEq for ValueRef {
+    fn eq(&self, other: &Self) -> bool {
+        if self.0 == other.0 {
+            return true;
+        }
+
+        self.to_value() == other.to_value()
+    }
+}
+
+impl Debug for ValueRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl Display for ValueRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_num() {
+            write!(f, "#{}", self.num())
+        } else {
+            let value = unsafe { std::mem::transmute::<u64, &Value>(self.0) };
+
+            match value {
+                Value::Cons(head, tail) => write!(f, "({} {})", head, tail),
+                Value::Nil => write!(f, "nil"),
+                Value::Quote(value) => write!(f, "'{}", value),
+                Value::Atom(value) => write!(f, "{}", value),
+            }
+        }
+    }
+}
+
+#[derive(Eq)]
 pub struct ValueRef(u64);
 
 impl ValueRef {
@@ -36,30 +78,10 @@ impl ValueRef {
     pub fn new_num(value: u64) -> ValueRef {
         ValueRef(value << 1 | 1)
     }
-}
 
-impl Display for ValueRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.is_num() {
-            write!(f, "#{}", self.num())
-        } else {
-            let value = unsafe { std::mem::transmute::<u64, &Value>(self.0) };
-
-            match value {
-                Value::Cons(head, tail) => write!(f, "({} {})", head, tail),
-                Value::Nil => write!(f, "nil"),
-                Value::Quote(value) => write!(f, "'{}", value),
-                Value::Atom(value) => write!(f, "{}", value),
-            }
-        }
+    pub fn to_value(&self) -> &Value {
+        unsafe { std::mem::transmute::<u64, &Value>(self.0) }
     }
-}
-
-pub enum Value {
-    Cons(ValueRef, ValueRef),
-    Atom(String),
-    Quote(ValueRef),
-    Nil,
 }
 
 #[cfg(test)]
