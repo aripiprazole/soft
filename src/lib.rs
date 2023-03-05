@@ -1,5 +1,6 @@
 #![feature(box_syntax, box_patterns)]
 
+pub mod conversion;
 pub mod repl;
 pub mod runtime;
 pub mod specialized;
