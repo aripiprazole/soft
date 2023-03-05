@@ -96,4 +96,9 @@ mod tests {
 
         assert_eq!(value_ref.to_string(), "(#1 #2)");
     }
+
+    #[test]
+    fn test_value_size() {
+        assert_eq!(std::mem::size_of::<Value>(), 32);
+    }
 }
