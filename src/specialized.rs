@@ -11,7 +11,7 @@ pub enum Term {
     Lam(Lifted, Vec<String>, Box<Term>),
     Let(Vec<(String, Term)>, Box<Term>),
     App(Box<Term>, Vec<Term>),
-    Closure(Vec<Term>, Box<Term>),
+    Closure(Vec<(String, Term)>, Box<Term>),
     EnvRef(Box<Term>, String),
     // Binop(Operator, Box<Term>, Box<Term>),
     Set(String, IsMacro, Box<Term>),
