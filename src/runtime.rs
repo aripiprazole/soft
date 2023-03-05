@@ -11,7 +11,23 @@ impl ValueRef {
         self.0 >> 1
     }
 
-    pub fn new_value(value: Value) -> ValueRef {
+    pub fn nil() -> ValueRef {
+        ValueRef::new(Value::Nil)
+    }
+
+    pub fn cons(head: ValueRef, tail: ValueRef) -> ValueRef {
+        ValueRef::new(Value::Cons(head, tail))
+    }
+
+    pub fn quote(value: ValueRef) -> ValueRef {
+        ValueRef::new(Value::Quote(value))
+    }
+
+    pub fn atom(value: String) -> ValueRef {
+        ValueRef::new(Value::Atom(value))
+    }
+
+    pub fn new(value: Value) -> ValueRef {
         let ptr = Box::leak(Box::new(value));
 
         ValueRef(ptr as *const Value as u64)
@@ -32,6 +48,8 @@ impl Display for ValueRef {
             match value {
                 Value::Cons(head, tail) => write!(f, "({} {})", head, tail),
                 Value::Nil => write!(f, "nil"),
+                Value::Quote(value) => write!(f, "'{}", value),
+                Value::Atom(value) => write!(f, "{}", value),
             }
         }
     }
@@ -39,6 +57,8 @@ impl Display for ValueRef {
 
 pub enum Value {
     Cons(ValueRef, ValueRef),
+    Atom(String),
+    Quote(ValueRef),
     Nil,
 }
 
@@ -50,7 +70,7 @@ mod tests {
     fn test_value_ref() {
         let value = Value::Cons(ValueRef::new_num(1), ValueRef::new_num(2));
 
-        let value_ref = ValueRef::new_value(value);
+        let value_ref = ValueRef::new(value);
 
         assert_eq!(value_ref.to_string(), "(#1 #2)");
     }

@@ -1,0 +1,14 @@
+use std::str::FromStr;
+use crate::runtime::ValueRef;
+
+grammar;
+
+pub Term: ValueRef = {
+    <s:Id> => ValueRef::atom(s),
+    <n:Num> => ValueRef::new_num(n),
+    "'" <t:Term> => ValueRef::quote(t),
+    "(" <t:Term*> ")" => t.into_iter().rfold(ValueRef::nil(), |acc, x| ValueRef::cons(x, acc)),
+};
+
+Num: u64 = <s:r"[0-9]+"> => u64::from_str(s).unwrap();
+Id: String = <s:r"[^()\r\n\t0-9 ][^()\r\n\t ]*"> => s.to_string();
