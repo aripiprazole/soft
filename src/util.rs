@@ -10,7 +10,17 @@ macro_rules! bool_enum {
     };
 }
 
+macro_rules! cstr {
+    ($s:expr) => {
+        concat!($s, "\0").as_ptr() as *const i8
+    };
+    () => {
+        "\0".as_ptr() as *const i8
+    };
+}
+
 pub(crate) use bool_enum;
+pub(crate) use cstr;
 
 pub enum Mode {
     Interperse,
