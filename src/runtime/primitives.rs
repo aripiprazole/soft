@@ -1,5 +1,13 @@
 pub use crate::runtime::{Value, ValueRef};
 
+macro_rules! f {
+    ($n:ident) => {
+        (stringify!($n), $n as *mut c_void)
+    };
+}
+
+pub(crate) use f;
+
 pub mod value {
     pub use super::*;
 
