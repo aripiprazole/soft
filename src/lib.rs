@@ -10,7 +10,11 @@ pub mod util;
 #[macro_use]
 extern crate lalrpop_util;
 
-lalrpop_mod!(pub soft);
+lalrpop_mod!(
+    #[allow(clippy::all)]
+    #[allow(unused)]
+    pub soft
+);
 
 pub use crate::soft::TermParser as Parser;
 
