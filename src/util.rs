@@ -1,11 +1,5 @@
 use std::fmt::Display;
 
-pub trait Container {
-    type Target;
-
-    fn f(&self) -> Self::Target;
-}
-
 pub enum Mode {
     Interperse,
     Before,
@@ -61,14 +55,6 @@ macro_rules! bool_enum {
 macro_rules! llvm_wrapper {
     ($n:ident, $target:ident, $print_fn:ident) => {
         pub struct $n(pub $target);
-
-        impl crate::util::Container for $target {
-            type Target = $n;
-
-            fn f(&self) -> Self::Target {
-                $n(*self)
-            }
-        }
 
         impl std::ops::Deref for $n {
             type Target = $target;
