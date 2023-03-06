@@ -62,11 +62,11 @@ macro_rules! llvm_wrapper {
     ($n:ident, $target:ident, $print_fn:ident) => {
         pub struct $n(pub $target);
 
-        impl crate::util::Container for $n {
-            type Target = $target;
+        impl crate::util::Container for $target {
+            type Target = $n;
 
             fn f(&self) -> Self::Target {
-                self.0
+                $n(*self)
             }
         }
 
