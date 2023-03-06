@@ -7,25 +7,38 @@ use super::*;
 #[derive(PartialEq, Eq, Clone)]
 pub struct SymbolRef(pub LLVMTypeRef, pub LLVMValueRef, pub *mut libc::c_void);
 
-#[derive(Default)]
 pub struct Context {
+    pub module: LLVMModuleRef,
     pub symbols: HashMap<String, SymbolRef>,
+}
+
+impl From<LLVMModuleRef> for Context {
+    fn from(module: LLVMModuleRef) -> Self {
+        Self {
+            module,
+            symbols: HashMap::new(),
+        }
+    }
+}
+
+type FunctionRef<'a> = (&'a str, *mut libc::c_void);
+
+impl Context {
+    pub fn with_sym(&mut self, f: FunctionRef, return_t: LLVMTypeRef, args: &mut [LLVMTypeRef]) {
+        let (name, addr) = f;
+
+        let func_t = unsafe { LLVMFunctionType(return_t, args.as_mut_ptr(), args.len() as _, 0) };
+        let func = unsafe { LLVMAddFunction(self.module, cstr!(name), func_t) };
+        let symbol_ref = SymbolRef(func_t, func, addr);
+
+        self.symbols.insert(name.to_string(), symbol_ref);
+    }
 }
 
 impl Codegen {
     pub unsafe fn compile_main(&self, ctx: &mut Context, term: Term) {
-        use crate::runtime::primitives::value::*;
-
         let main_t = LLVMFunctionType(self.types.void_ptr, [].as_mut_ptr(), 0, 0);
         let main = LLVMAddFunction(self.module, cstr!("main"), main_t);
-
-        let new_num_t = LLVMFunctionType(self.types.void_ptr, [self.types.u64].as_mut_ptr(), 1, 0);
-        let new_num = LLVMAddFunction(self.module, cstr!("prim__Value_new_num"), new_num_t);
-
-        ctx.symbols.insert(
-            "prim__Value_new_num".to_string(),
-            SymbolRef(new_num_t, new_num, prim__Value_new_num as *mut _),
-        );
 
         let entry = LLVMAppendBasicBlockInContext(self.context, main, cstr!("entry"));
         LLVMPositionBuilderAtEnd(self.builder, entry);

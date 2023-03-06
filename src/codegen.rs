@@ -97,17 +97,24 @@ pub extern "C" fn handle_diagnostic(info: LLVMDiagnosticInfoRef, _context: *mut 
 
 #[cfg(test)]
 mod tests {
-    use crate::{runtime::ValueRef, specialized::Term};
+    use crate::specialized::Term;
 
     use super::*;
+    use crate::runtime::primitives::f;
 
     #[test]
     fn test_codegen() {
+        use crate::runtime::primitives::value::*;
+
         unsafe {
             Codegen::install_execution_targets();
 
             let codegen = Codegen::try_new().unwrap().install_error_handling();
-            let mut context = compile::Context::default();
+            let types = &codegen.types;
+
+            let mut context = compile::Context::from(codegen.module);
+            context.with_sym(f!(prim__Value_new_num), types.void_ptr, &mut [types.u64]);
+
             codegen.compile_main(&mut context, Term::Num(42));
             codegen.dump_module();
             codegen.verify_module().unwrap_or_else(|error| {
