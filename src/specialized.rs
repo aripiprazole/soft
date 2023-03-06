@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{
     runtime::{Value, ValueRef},
-    util::bool_enum,
+    util::{bool_enum, Mode, Spaced},
 };
 
 bool_enum!(IsMacro);
@@ -22,39 +22,6 @@ pub enum Term {
     Num(u64),
     Quote(Box<Term>),
     Nil,
-}
-
-pub enum Mode {
-    Interperse,
-    Before,
-}
-
-pub struct Spaced<'a, T>(Mode, &'static str, &'a [T])
-where
-    T: Display;
-
-impl<'a, T> Display for Spaced<'a, T>
-where
-    T: Display,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Spaced(Mode::Interperse, string, slice) => {
-                if !slice.is_empty() {
-                    write!(f, "{}", slice[0])?;
-                    for element in &slice[1..] {
-                        write!(f, "{string}{element}")?;
-                    }
-                }
-            }
-            Spaced(Mode::Before, string, slice) => {
-                for element in slice.iter() {
-                    write!(f, "{string}{element}")?;
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 impl Display for Term {
