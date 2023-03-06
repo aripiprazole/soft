@@ -19,8 +19,52 @@ macro_rules! cstr {
     };
 }
 
+macro_rules! llvm_wrapper {
+    ($n:ident, $target:ident, $print_fn:ident) => {
+        pub struct $n(pub $target);
+
+        impl crate::util::Container for $n {
+            type Target = $target;
+
+            fn f(&self) -> Self::Target {
+                self.0
+            }
+        }
+
+        impl std::ops::Deref for $n {
+            type Target = $target;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl std::fmt::Debug for $n {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{self}")
+            }
+        }
+
+        impl std::fmt::Display for $n {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                unsafe {
+                    let string = CStr::from_ptr($print_fn(self.0)).to_string_lossy();
+                    write!(f, "{string}")
+                }
+            }
+        }
+    };
+}
+
 pub(crate) use bool_enum;
 pub(crate) use cstr;
+pub(crate) use llvm_wrapper;
+
+pub trait Container {
+    type Target;
+
+    fn f(&self) -> Self::Target;
+}
 
 pub enum Mode {
     Interperse,
