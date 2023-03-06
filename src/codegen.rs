@@ -97,6 +97,8 @@ pub extern "C" fn handle_diagnostic(info: LLVMDiagnosticInfoRef, _context: *mut 
 
 #[cfg(test)]
 mod tests {
+    use crate::{runtime::ValueRef, specialized::Term};
+
     use super::*;
 
     #[test]
@@ -105,20 +107,8 @@ mod tests {
             Codegen::install_execution_targets();
 
             let codegen = Codegen::try_new().unwrap().install_error_handling();
-
-            let args_t = [codegen.types.u64, codegen.types.u64].as_mut_ptr();
-            let sum_t = LLVMFunctionType(codegen.types.u64, args_t, 2, 0);
-            let sum = LLVMAddFunction(codegen.module, cstr!("sum"), sum_t);
-
-            let entry = LLVMAppendBasicBlockInContext(codegen.context, sum, cstr!("entry"));
-            LLVMPositionBuilderAtEnd(codegen.builder, entry);
-
-            let x = LLVMGetParam(sum, 0);
-            let y = LLVMGetParam(sum, 1);
-
-            let value = LLVMBuildAdd(codegen.builder, x, y, cstr!("sum.value"));
-            LLVMBuildRet(codegen.builder, value);
-
+            let mut context = compile::Context::default();
+            codegen.compile_main(&mut context, Term::Num(42));
             codegen.dump_module();
             codegen.verify_module().unwrap_or_else(|error| {
                 for line in error.split("\n") {
@@ -128,12 +118,14 @@ mod tests {
                 panic!("Module verification failed")
             });
 
-            let engine = execution::ExecutionEngine::try_new(codegen.module).unwrap();
+            let engine = execution::ExecutionEngine::try_new(codegen.module)
+                .unwrap()
+                .add_primitive_symbols(context);
 
-            let f: extern "C" fn(u64, u64) -> u64 =
-                std::mem::transmute(engine.get_function_address("sum"));
+            let f: extern "C" fn() -> ValueRef =
+                std::mem::transmute(engine.get_function_address("main"));
 
-            println!("sum(1, 2): {} = {}", types::Type(sum_t), f(1, 2));
+            println!("main() = {}", f());
         }
     }
 }

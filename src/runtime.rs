@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Display};
 
+pub mod primitives;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Value {
     Cons(ValueRef, ValueRef),
@@ -38,8 +40,8 @@ impl Display for ValueRef {
         }
     }
 }
-
 #[derive(Eq, Clone, Copy)]
+#[repr(C)]
 pub struct ValueRef(u64);
 
 impl ValueRef {

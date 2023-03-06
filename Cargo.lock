@@ -600,6 +600,7 @@ dependencies = [
  "im",
  "lalrpop",
  "lalrpop-util",
+ "libc",
  "llvm-sys",
  "regex",
  "rustyline",
