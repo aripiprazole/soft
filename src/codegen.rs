@@ -6,15 +6,12 @@ use std::{
 use llvm_sys::{
     analysis::{LLVMVerifierFailureAction::LLVMReturnStatusAction, LLVMVerifyModule},
     error::LLVMDisposeErrorMessage,
-    error_handling::{
-        LLVMEnablePrettyStackTrace, LLVMInstallFatalErrorHandler, LLVMResetFatalErrorHandler,
-    },
     target::{LLVM_InitializeNativeAsmPrinter, LLVM_InitializeNativeTarget},
     LLVMDiagnosticSeverity::{LLVMDSError, LLVMDSNote, LLVMDSRemark, LLVMDSWarning},
 };
 pub use llvm_sys::{core::*, execution_engine::*, prelude::*};
 
-use crate::util::cstr;
+use crate::util::{cstr, llvm_wrapper};
 
 pub type CodegenError = String;
 
@@ -95,6 +92,9 @@ pub extern "C" fn handle_diagnostic(info: LLVMDiagnosticInfoRef, _context: *mut 
         println!("[{kind}] {message}");
     }
 }
+
+llvm_wrapper!(Type, LLVMTypeRef, LLVMPrintTypeToString);
+llvm_wrapper!(Value, LLVMValueRef, LLVMPrintValueToString);
 
 pub struct Types {
     pub void_ptr: LLVMTypeRef,
@@ -179,7 +179,7 @@ mod tests {
             let f: extern "C" fn(u64, u64) -> u64 =
                 std::mem::transmute(engine.get_function_address("sum"));
 
-            println!("sum(1, 2) = {}", f(1, 2));
+            println!("sum(1, 2): {} = {}", Type(sum_t), f(1, 2));
         }
     }
 }
