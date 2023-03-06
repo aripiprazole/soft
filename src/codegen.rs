@@ -1,6 +1,17 @@
-use std::{ffi::CStr, mem};
+use std::{
+    ffi::{c_void, CStr},
+    mem,
+};
 
-use llvm_sys::target::{LLVM_InitializeNativeAsmPrinter, LLVM_InitializeNativeTarget};
+use llvm_sys::{
+    analysis::{LLVMVerifierFailureAction::LLVMReturnStatusAction, LLVMVerifyModule},
+    error::LLVMDisposeErrorMessage,
+    error_handling::{
+        LLVMEnablePrettyStackTrace, LLVMInstallFatalErrorHandler, LLVMResetFatalErrorHandler,
+    },
+    target::{LLVM_InitializeNativeAsmPrinter, LLVM_InitializeNativeTarget},
+    LLVMDiagnosticSeverity::{LLVMDSError, LLVMDSNote, LLVMDSRemark, LLVMDSWarning},
+};
 pub use llvm_sys::{core::*, execution_engine::*, prelude::*};
 
 use crate::util::cstr;
@@ -39,14 +50,49 @@ impl Codegen {
         })
     }
 
+    pub unsafe fn install_error_handling(self) -> Self {
+        // enable diagnostic messages
+        let diagnostic_context = LLVMContextGetDiagnosticContext(self.context);
+        LLVMContextSetDiagnosticHandler(self.context, Some(handle_diagnostic), diagnostic_context);
+
+        self
+    }
+
+    pub unsafe fn verify_module(&self) -> Result<(), String> {
+        let mut err = mem::zeroed();
+
+        if LLVMVerifyModule(self.module, LLVMReturnStatusAction, &mut err) == 1 {
+            let message = CStr::from_ptr(err).to_string_lossy().to_string();
+            LLVMDisposeErrorMessage(err);
+            return Err(message);
+        }
+
+        Ok(())
+    }
+
     pub unsafe fn dump_module(&self) {
         LLVMDumpModule(self.module);
     }
 
-    pub unsafe fn initialize_execution_targets() {
+    pub unsafe fn install_execution_targets() {
         LLVMLinkInMCJIT();
         LLVM_InitializeNativeTarget();
         LLVM_InitializeNativeAsmPrinter();
+    }
+}
+
+pub extern "C" fn handle_diagnostic(info: LLVMDiagnosticInfoRef, _context: *mut c_void) {
+    unsafe {
+        let kind = match LLVMGetDiagInfoSeverity(info) {
+            LLVMDSError => "error",
+            LLVMDSWarning => "warning",
+            LLVMDSRemark => "remark",
+            LLVMDSNote => "note",
+        };
+
+        let message = CStr::from_ptr(LLVMGetDiagInfoDescription(info)).to_string_lossy();
+
+        println!("[{kind}] {message}");
     }
 }
 
@@ -102,9 +148,9 @@ mod tests {
     #[test]
     fn test_codegen() {
         unsafe {
-            Codegen::initialize_execution_targets();
+            Codegen::install_execution_targets();
 
-            let codegen = Codegen::try_new().unwrap();
+            let codegen = Codegen::try_new().unwrap().install_error_handling();
 
             let args_t = [codegen.types.u64, codegen.types.u64].as_mut_ptr();
             let sum_t = LLVMFunctionType(codegen.types.u64, args_t, 2, 0);
@@ -120,6 +166,13 @@ mod tests {
             LLVMBuildRet(codegen.builder, value);
 
             codegen.dump_module();
+            codegen.verify_module().unwrap_or_else(|error| {
+                for line in error.split("\n") {
+                    println!("[error*] {}", line);
+                }
+
+                panic!("Module verification failed")
+            });
 
             let engine = ExecutionEngine::try_new(codegen.module).unwrap();
 
