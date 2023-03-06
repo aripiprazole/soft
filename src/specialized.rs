@@ -71,8 +71,8 @@ impl Term {
             },
             "lambda" => match tail.as_slice() {
                 [Term::Nil, body] => Term::Lam(Lifted::No, vec![], box body.clone()),
-                [Term::App(head, args), body] => {
-                    let arguments = vec![*head.clone()]
+                [Term::App(box head, args), body] => {
+                    let arguments = vec![head.clone()]
                         .iter()
                         .chain(args.iter())
                         .map(|arg| match arg {
@@ -87,8 +87,8 @@ impl Term {
             },
             "let" => match tail.as_slice() {
                 [Term::Nil] => todo!(),
-                [Term::App(head, args), body] => {
-                    let bindings = vec![*head.clone()]
+                [Term::App(box head, args), body] => {
+                    let bindings = vec![head.clone()]
                         .iter()
                         .chain(args.iter())
                         .map(|entry| match entry {
