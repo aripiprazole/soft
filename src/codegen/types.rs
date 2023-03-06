@@ -11,7 +11,7 @@ pub struct Types {
 impl Types {
     pub unsafe fn try_new(context: LLVMContextRef) -> Result<Self, CodegenError> {
         Ok(Self {
-            void_ptr: LLVMVoidTypeInContext(context),
+            void_ptr: LLVMPointerType(LLVMInt8TypeInContext(context), 0),
             u64: LLVMInt64TypeInContext(context),
         })
     }

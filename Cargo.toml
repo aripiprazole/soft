@@ -11,6 +11,7 @@ lalrpop = "0.19.7"
 [dependencies]
 im = "15.1.0"
 lalrpop-util = {version = "0.19.7", features = ["lexer"]}
+libc = "0.2.139"
 llvm-sys = "150.0.5"
 regex = "1"
 rustyline = "11.0.0"
