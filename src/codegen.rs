@@ -17,11 +17,18 @@ pub mod types;
 
 pub type CodegenError = String;
 
+macro_rules! f {
+    ($n:ident) => {
+        (stringify!($n), $n as *mut c_void)
+    };
+}
+
 pub struct Codegen {
     pub context: LLVMContextRef,
     pub module: LLVMModuleRef,
     pub builder: LLVMBuilderRef,
     pub types: types::Types,
+    pub compile_context: compile::Context,
 }
 
 impl Drop for Codegen {
@@ -40,12 +47,14 @@ impl Codegen {
         let module = LLVMModuleCreateWithNameInContext(cstr!("soft"), context);
         let builder = LLVMCreateBuilderInContext(context);
         let types = types::Types::try_new(context)?;
+        let compile_context = compile::Context::from(module);
 
         Ok(Codegen {
             context,
             module,
             builder,
             types,
+            compile_context,
         })
     }
 
@@ -53,6 +62,17 @@ impl Codegen {
         // enable diagnostic messages
         let diagnostic_context = LLVMContextGetDiagnosticContext(self.context);
         LLVMContextSetDiagnosticHandler(self.context, Some(handle_diagnostic), diagnostic_context);
+
+        self
+    }
+
+    pub unsafe fn install_primitives(mut self) -> Self {
+        use crate::runtime::primitives::value::*;
+
+        let types = &self.types;
+        let ctx = &mut self.compile_context;
+
+        ctx.with_sym(f!(prim__Value_new_num), types.ptr, &mut [types.u64]);
 
         self
     }
@@ -97,25 +117,21 @@ pub extern "C" fn handle_diagnostic(info: LLVMDiagnosticInfoRef, _context: *mut 
 
 #[cfg(test)]
 mod tests {
-    use crate::specialized::Term;
+    use crate::{runtime::ValueRef, specialized::Term};
 
     use super::*;
-    use crate::runtime::primitives::f;
 
     #[test]
     fn test_codegen() {
-        use crate::runtime::primitives::value::*;
-
         unsafe {
             Codegen::install_execution_targets();
 
-            let codegen = Codegen::try_new().unwrap().install_error_handling();
-            let types = &codegen.types;
+            let codegen = Codegen::try_new()
+                .unwrap()
+                .install_error_handling()
+                .install_primitives();
 
-            let mut context = compile::Context::from(codegen.module);
-            context.with_sym(f!(prim__Value_new_num), types.void_ptr, &mut [types.u64]);
-
-            codegen.compile_main(&mut context, Term::Num(42));
+            codegen.compile_main(Term::Num(42));
             codegen.dump_module();
             codegen.verify_module().unwrap_or_else(|error| {
                 for line in error.split("\n") {
@@ -127,7 +143,7 @@ mod tests {
 
             let engine = execution::ExecutionEngine::try_new(codegen.module)
                 .unwrap()
-                .add_primitive_symbols(context);
+                .add_primitive_symbols(&codegen.compile_context);
 
             let f: extern "C" fn() -> ValueRef =
                 std::mem::transmute(engine.get_function_address("main"));

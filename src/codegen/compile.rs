@@ -36,18 +36,18 @@ impl Context {
 }
 
 impl Codegen {
-    pub unsafe fn compile_main(&self, ctx: &mut Context, term: Term) {
-        let main_t = LLVMFunctionType(self.types.void_ptr, [].as_mut_ptr(), 0, 0);
+    pub unsafe fn compile_main(&self, term: Term) {
+        let main_t = LLVMFunctionType(self.types.ptr, [].as_mut_ptr(), 0, 0);
         let main = LLVMAddFunction(self.module, cstr!("main"), main_t);
 
         let entry = LLVMAppendBasicBlockInContext(self.context, main, cstr!("entry"));
         LLVMPositionBuilderAtEnd(self.builder, entry);
 
-        let value = self.compile_term(ctx, term);
+        let value = self.compile_term(term);
         LLVMBuildRet(self.builder, value);
     }
 
-    pub unsafe fn compile_term(&self, ctx: &mut Context, term: Term) -> LLVMValueRef {
+    pub unsafe fn compile_term(&self, term: Term) -> LLVMValueRef {
         match term {
             Term::Lam(_, _, _) => todo!(),
             Term::Let(_, _) => todo!(),
@@ -60,20 +60,16 @@ impl Codegen {
             Term::GlobalRef(_) => todo!(),
             Term::Num(n) => {
                 let x = LLVMConstInt(self.types.u64, n as u64, 0);
-                self.call_prim(ctx, "prim__Value_new_num", &mut [x])
+                self.call_prim("prim__Value_new_num", &mut [x])
             }
             Term::Quote(_) => todo!(),
             Term::Nil => todo!(),
         }
     }
 
-    unsafe fn call_prim(
-        &self,
-        ctx: &mut Context,
-        name: &str,
-        args: &mut [LLVMValueRef],
-    ) -> LLVMValueRef {
-        let SymbolRef(func_t, func, _) = *ctx
+    unsafe fn call_prim(&self, name: &str, args: &mut [LLVMValueRef]) -> LLVMValueRef {
+        let SymbolRef(func_t, func, _) = *self
+            .compile_context
             .symbols
             .get(name)
             .expect(&format!("No such primitive: {name}"));
