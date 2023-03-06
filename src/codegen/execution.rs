@@ -26,7 +26,7 @@ impl ExecutionEngine {
         Ok(ExecutionEngine(ptr.assume_init()))
     }
 
-    pub unsafe fn add_primitive_symbols(self, context: compile::Context) -> Self {
+    pub unsafe fn add_primitive_symbols(self, context: &compile::Context) -> Self {
         for SymbolRef(_, sym, addr) in context.symbols.values() {
             LLVMAddGlobalMapping(self.0, *sym, *addr);
         }
