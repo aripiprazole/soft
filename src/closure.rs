@@ -28,44 +28,44 @@ impl Closure {
         use Term::*;
 
         match term {
-            Quote(quoted) => Quote(box self.convert(*quoted)),
             EnvRef(name) => EnvRef(name),
-            Set(name, is_macro, value) => Set(name, is_macro, box self.convert(*value)),
+            Quote(box quoted) => Quote(box self.convert(quoted)),
+            Set(name, is_macro, box value) => Set(name, is_macro, box self.convert(value)),
             LocalRef(symbol) | GlobalRef(symbol) if self.subst.contains(&symbol) => EnvRef(symbol),
             GlobalRef(symbol) if self.env.contains(&symbol) => LocalRef(symbol),
-            If(cond, then_branch, else_branch) => Term::If(
-                box self.convert(*cond),
-                box self.convert(*then_branch),
-                box self.convert(*else_branch),
+            If(box cond, box then_branch, box else_branch) => Term::If(
+                box self.convert(cond),
+                box self.convert(then_branch),
+                box self.convert(else_branch),
             ),
-            Cons(head, tail) => Term::Cons(box self.convert(*head), box self.convert(*tail)),
+            Cons(box head, box tail) => Term::Cons(box self.convert(head), box self.convert(tail)),
             Call(address, args) => Call(
                 address,
                 args.into_iter().map(|arg| self.convert(arg)).collect(),
             ),
-            Closure(env_values, lam) => {
+            Closure(env_values, box lam) => {
                 let env_values = env_values
                     .into_iter()
                     .map(|(name, value)| (name, self.convert(value)))
                     .collect();
 
-                Closure(env_values, box self.convert(*lam))
+                Closure(env_values, box self.convert(lam))
             }
-            App(callee, args) => App(
-                box self.convert(*callee),
+            App(box callee, args) => App(
+                box self.convert(callee),
                 args.into_iter().map(|arg| self.convert(arg)).collect(),
             ),
-            Lam(Lifted::Yes, args, body) => {
+            Lam(Lifted::Yes, args, box body) => {
                 let mut closure = self.extend();
 
                 closure.env.extend(args.iter().cloned());
                 closure.subst.retain(|name| !args.contains(name));
 
-                let body = box closure.convert(*body);
+                let body = box closure.convert(body);
 
                 Lam(Lifted::Yes, args, body)
             }
-            Lam(Lifted::No, args, body) => {
+            Lam(Lifted::No, args, box body) => {
                 let mut closure = self.extend();
 
                 closure.env.extend(args.iter().cloned());
@@ -80,7 +80,7 @@ impl Closure {
                     .intersection(fv);
 
                 let is_closure = closure_refs.is_empty();
-                let body = box closure.with_subst(closure_refs.clone()).convert(*body);
+                let body = box closure.with_subst(closure_refs.clone()).convert(body);
 
                 let result = if is_closure {
                     Lam(Lifted::Yes, args, body)
@@ -95,7 +95,7 @@ impl Closure {
 
                 self.convert(result)
             }
-            Let(entries, body) => {
+            Let(entries, box body) => {
                 let mut new_entries: Vec<(String, Term)> = vec![];
                 let mut closure = self.extend();
 
@@ -106,7 +106,7 @@ impl Closure {
                     closure.subst.remove(&name);
                 }
 
-                let body = box closure.convert(*body);
+                let body = box closure.convert(body);
 
                 Let(new_entries, body)
             }
