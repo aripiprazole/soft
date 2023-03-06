@@ -1,6 +1,8 @@
 use im::HashMap;
 
 use crate::specialized::Term;
+use llvm_sys::LLVMIntPredicate::LLVMIntEQ;
+use std::mem::MaybeUninit;
 
 use super::*;
 
@@ -10,6 +12,7 @@ pub struct SymbolRef(pub LLVMTypeRef, pub LLVMValueRef, pub *mut libc::c_void);
 pub struct Context {
     pub module: LLVMModuleRef,
     pub symbols: HashMap<String, SymbolRef>,
+    pub current: LLVMValueRef,
 }
 
 impl From<LLVMModuleRef> for Context {
@@ -17,6 +20,7 @@ impl From<LLVMModuleRef> for Context {
         Self {
             module,
             symbols: HashMap::new(),
+            current: unsafe { MaybeUninit::zeroed().assume_init() },
         }
     }
 }
@@ -36,18 +40,22 @@ impl Context {
 }
 
 impl Codegen {
-    pub unsafe fn compile_main(&self, term: Term) {
+    pub unsafe fn compile_main(&mut self, term: Term) {
         let main_t = LLVMFunctionType(self.types.ptr, [].as_mut_ptr(), 0, 0);
         let main = LLVMAddFunction(self.module, cstr!("main"), main_t);
 
         let entry = LLVMAppendBasicBlockInContext(self.context, main, cstr!("entry"));
         LLVMPositionBuilderAtEnd(self.builder, entry);
 
+        self.symbols.current = main;
+
         let value = self.compile_term(term);
         LLVMBuildRet(self.builder, value);
     }
 
     pub unsafe fn compile_term(&self, term: Term) -> LLVMValueRef {
+        let current = self.symbols.current;
+
         match term {
             Term::Lam(_, _, _) => todo!(),
             Term::Let(_, _) => todo!(),
@@ -64,12 +72,50 @@ impl Codegen {
             }
             Term::Quote(_) => todo!(),
             Term::Nil => self.call_prim("prim__Value_nil", &mut []),
+            Term::If(cond_term, then_term, else_term) => {
+                let next_br = LLVMAppendBasicBlockInContext(self.context, current, cstr!());
+                let then_br = LLVMAppendBasicBlockInContext(self.context, current, cstr!());
+                let else_br = LLVMAppendBasicBlockInContext(self.context, current, cstr!());
+
+                let cond_value = self.compile_term(*cond_term);
+
+                let is_true = self.call_prim("prim__Value_is_true", &mut [cond_value]);
+                let true_v = LLVMConstInt(self.types.i1, 1, 0);
+
+                let result = LLVMBuildICmp(self.builder, LLVMIntEQ, is_true, true_v, cstr!());
+
+                LLVMBuildCondBr(self.builder, result, then_br, else_br);
+
+                LLVMPositionBuilderAtEnd(self.builder, then_br);
+
+                let then_value = self.compile_term(*then_term);
+                LLVMBuildBr(self.builder, next_br);
+
+                LLVMPositionBuilderAtEnd(self.builder, else_br);
+
+                let else_value = self.compile_term(*else_term);
+                LLVMBuildBr(self.builder, next_br);
+
+                LLVMPositionBuilderAtEnd(self.builder, next_br);
+
+                let phi = LLVMBuildPhi(self.builder, self.types.ptr, cstr!());
+
+                LLVMAddIncoming(
+                    phi,
+                    [then_value, else_value].as_mut_ptr(),
+                    [then_br, else_br].as_mut_ptr(),
+                    2,
+                );
+
+                phi
+            }
+            Term::Cons(_, _) => todo!(),
         }
     }
 
     unsafe fn call_prim(&self, name: &str, args: &mut [LLVMValueRef]) -> LLVMValueRef {
         let SymbolRef(func_t, func, _) = *self
-            .compile_context
+            .symbols
             .symbols
             .get(name)
             .expect(&format!("No such primitive: {name}"));

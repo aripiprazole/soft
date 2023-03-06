@@ -33,6 +33,12 @@ impl Closure {
             Set(name, is_macro, value) => Set(name, is_macro, box self.convert(*value)),
             LocalRef(symbol) | GlobalRef(symbol) if self.subst.contains(&symbol) => EnvRef(symbol),
             GlobalRef(symbol) if self.env.contains(&symbol) => LocalRef(symbol),
+            If(cond, then_branch, else_branch) => Term::If(
+                box self.convert(*cond),
+                box self.convert(*then_branch),
+                box self.convert(*else_branch),
+            ),
+            Cons(head, tail) => Term::Cons(box self.convert(*head), box self.convert(*tail)),
             Call(address, args) => Call(
                 address,
                 args.into_iter().map(|arg| self.convert(arg)).collect(),
@@ -123,6 +129,10 @@ fn free_vars(term: &Term) -> im::HashSet<String> {
         Quote(quoted) => free_vars(quoted),
         GlobalRef(name) | LocalRef(name) => HashSet::from_iter([name.clone()]),
         App(callee, args) => free_vars(callee).union(args.iter().flat_map(free_vars).collect()),
+        Cons(head, tail) => free_vars(head).union(free_vars(tail)),
+        If(cond, then_branch, else_branch) => free_vars(cond)
+            .union(free_vars(then_branch))
+            .union(free_vars(else_branch)),
         Lam(_, names, body) => {
             let mut body_fv = free_vars(body);
 
