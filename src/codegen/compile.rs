@@ -78,13 +78,9 @@ impl Codegen {
                 let else_br = LLVMAppendBasicBlockInContext(self.context, current, cstr!());
 
                 let cond_value = self.compile_term(*cond_term);
+                let cond = self.build_if_true(cond_value);
 
-                let is_true = self.call_prim("prim__Value_is_true", &mut [cond_value]);
-                let true_v = LLVMConstInt(self.types.i1, 1, 0);
-
-                let result = LLVMBuildICmp(self.builder, LLVMIntEQ, is_true, true_v, cstr!());
-
-                LLVMBuildCondBr(self.builder, result, then_br, else_br);
+                LLVMBuildCondBr(self.builder, cond, then_br, else_br);
 
                 LLVMPositionBuilderAtEnd(self.builder, then_br);
 
@@ -111,6 +107,13 @@ impl Codegen {
             }
             Term::Cons(_, _) => todo!(),
         }
+    }
+
+    unsafe fn build_if_true(&self, cond: LLVMValueRef) -> LLVMValueRef {
+        let is_true = self.call_prim("prim__Value_is_true", &mut [cond]);
+        let true_v = LLVMConstInt(self.types.i1, 1, 0);
+
+        LLVMBuildICmp(self.builder, LLVMIntEQ, is_true, true_v, cstr!())
     }
 
     unsafe fn call_prim(&self, name: &str, args: &mut [LLVMValueRef]) -> LLVMValueRef {
