@@ -21,7 +21,96 @@ pub enum Term {
     GlobalRef(String),
     Num(u64),
     Quote(Box<Term>),
+    If(Box<Term>, Box<Term>, Box<Term>),
+    Cons(Box<Term>, Box<Term>),
     Nil,
+}
+
+impl Term {
+    pub fn specialize(value: ValueRef) -> Term {
+        if value.is_num() {
+            return Term::Num(value.num());
+        }
+
+        match value.to_value() {
+            Value::Cons(head, tail) if head.is_num() => {
+                let args = cons_to_list(*tail);
+                Term::App(box Term::specialize(*head), args)
+            }
+            Value::Cons(head, tail) => {
+                let args = cons_to_list(*tail);
+                match head.to_value() {
+                    Value::Atom(symbol) => Term::specialize_cons(symbol, args),
+                    _ => Term::App(box Term::specialize(*head), args),
+                }
+            }
+            Value::Atom(symbol) => Term::GlobalRef(symbol.clone()),
+            Value::Nil => Term::Nil,
+        }
+    }
+
+    fn specialize_cons(head: &str, tail: Vec<Term>) -> Term {
+        match head {
+            "set*" => match tail.as_slice() {
+                [Term::GlobalRef(name), value] => {
+                    Term::Set(name.clone(), IsMacro::No, box value.clone())
+                }
+                _ => todo!(),
+            },
+            "cons*" => match tail.as_slice() {
+                [head, tail] => Term::Cons(box head.clone(), box tail.clone()),
+                _ => todo!(),
+            },
+            "if" => match tail.as_slice() {
+                [cond, then_branch, else_branch] => Term::If(
+                    box cond.clone(),
+                    box then_branch.clone(),
+                    box else_branch.clone(),
+                ),
+                _ => todo!(),
+            },
+            "lambda" => match tail.as_slice() {
+                [Term::Nil, body] => Term::Lam(Lifted::No, vec![], box body.clone()),
+                [Term::App(head, args), body] => {
+                    let arguments = vec![*head.clone()]
+                        .iter()
+                        .chain(args.iter())
+                        .map(|arg| match arg {
+                            Term::GlobalRef(name) => name.clone(),
+                            _ => todo!(),
+                        })
+                        .collect();
+
+                    Term::Lam(Lifted::No, arguments, box body.clone())
+                }
+                _ => todo!(),
+            },
+            "let" => match tail.as_slice() {
+                [Term::Nil] => todo!(),
+                [Term::App(head, args), body] => {
+                    let bindings = vec![*head.clone()]
+                        .iter()
+                        .chain(args.iter())
+                        .map(|entry| match entry {
+                            Term::App(box Term::GlobalRef(name), value) => match value.as_slice() {
+                                [value] => (name.clone(), value.clone()),
+                                _ => todo!(),
+                            },
+                            _ => todo!(),
+                        })
+                        .collect();
+
+                    Term::Let(bindings, box body.clone())
+                }
+                _ => todo!(),
+            },
+            "quote" => match tail.as_slice() {
+                [value] => Term::Quote(box value.clone()),
+                _ => todo!(),
+            },
+            _ => Term::App(box Term::GlobalRef(head.to_owned()), tail),
+        }
+    }
 }
 
 impl Display for Term {
@@ -81,81 +170,17 @@ impl Display for Term {
             Term::Num(n) => write!(f, "{n}"),
             Term::Quote(expr) => write!(f, "'{expr}"),
             Term::Nil => write!(f, "nil"),
-        }
-    }
-}
-
-impl Term {
-    pub fn specialize(value: ValueRef) -> Term {
-        if value.is_num() {
-            return Term::Num(value.num());
-        }
-
-        match value.to_value() {
-            Value::Cons(head, tail) if head.is_num() => {
-                let args = cons_to_list(*tail);
-                Term::App(box Term::specialize(*head), args)
+            Term::If(cond, then_branch, else_branch) => {
+                write!(f, "(if")?;
+                write!(f, " {cond}")?;
+                write!(f, " {then_branch}")?;
+                write!(f, " {else_branch})")
             }
-            Value::Cons(head, tail) => {
-                let args = cons_to_list(*tail);
-                match head.to_value() {
-                    Value::Atom(symbol) => Term::specialize_cons(symbol, args),
-                    _ => Term::App(box Term::specialize(*head), args),
-                }
+            Term::Cons(head, tail) => {
+                write!(f, "(cons*")?;
+                write!(f, " {head}")?;
+                write!(f, " {tail})")
             }
-            Value::Atom(symbol) => Term::GlobalRef(symbol.clone()),
-            Value::Nil => Term::Nil,
-        }
-    }
-
-    fn specialize_cons(head: &str, tail: Vec<Term>) -> Term {
-        match head {
-            "set*" => match tail.as_slice() {
-                [Term::GlobalRef(name), value] => {
-                    Term::Set(name.clone(), IsMacro::No, box value.clone())
-                }
-                _ => todo!(),
-            },
-            "lambda" => match tail.as_slice() {
-                [Term::Nil, body] => Term::Lam(Lifted::No, vec![], box body.clone()),
-                [Term::App(head, args), body] => {
-                    let arguments = vec![*head.clone()]
-                        .iter()
-                        .chain(args.iter())
-                        .map(|arg| match arg {
-                            Term::GlobalRef(name) => name.clone(),
-                            _ => todo!(),
-                        })
-                        .collect();
-
-                    Term::Lam(Lifted::No, arguments, box body.clone())
-                }
-                _ => todo!(),
-            },
-            "let" => match tail.as_slice() {
-                [Term::Nil] => todo!(),
-                [Term::App(head, args), body] => {
-                    let bindings = vec![*head.clone()]
-                        .iter()
-                        .chain(args.iter())
-                        .map(|entry| match entry {
-                            Term::App(box Term::GlobalRef(name), value) => match value.as_slice() {
-                                [value] => (name.clone(), value.clone()),
-                                _ => todo!(),
-                            },
-                            _ => todo!(),
-                        })
-                        .collect();
-
-                    Term::Let(bindings, box body.clone())
-                }
-                _ => todo!(),
-            },
-            "quote" => match tail.as_slice() {
-                [value] => Term::Quote(box value.clone()),
-                _ => todo!(),
-            },
-            _ => Term::App(box Term::GlobalRef(head.to_owned()), tail),
         }
     }
 }
