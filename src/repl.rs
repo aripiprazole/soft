@@ -26,20 +26,21 @@ pub fn run() {
                         println!(": {value_ref}")
                     }
                     Err(err) => {
-                        println!("Uncaught error when evaluating: {err:?}");
+                        println!("[error] Uncaught error when evaluating:");
+                        println!("~ {err}")
                     }
                 }
             }
             Err(ReadlineError::Interrupted) => {
-                println!("Bye bye...");
+                println!("[exit] Bye bye... 👋");
                 break;
             }
             Err(ReadlineError::Eof) => {
-                println!("CTRL-D");
+                println!("[exit] CTRL-D");
                 break;
             }
             Err(err) => {
-                println!("Uncaught I/O error: {err:?}");
+                println!("[error] Uncaught I/O error: {err:?}");
                 break;
             }
         }
@@ -53,8 +54,8 @@ fn eval_line(line: String) -> Result<ValueRef, String> {
 
     let term = value.specialize().map_err(|e| {
         format!(
-            "[error] Could not specialize expression on code [{}:{}:{}]",
-            e.r_source_file, e.r_source_line, e.r_source_column,
+            "[error] Could not specialize expression on code [{}:{}:{}]: {}",
+            e.r_source_file, e.r_source_line, e.r_source_column, e.message
         )
     })?;
 
