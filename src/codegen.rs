@@ -28,7 +28,7 @@ pub struct Codegen {
     pub module: LLVMModuleRef,
     pub builder: LLVMBuilderRef,
     pub types: types::Types,
-    pub compile_context: compile::Context,
+    pub symbols: compile::Context,
 }
 
 impl Drop for Codegen {
@@ -47,14 +47,14 @@ impl Codegen {
         let module = LLVMModuleCreateWithNameInContext(cstr!("soft"), context);
         let builder = LLVMCreateBuilderInContext(context);
         let types = types::Types::try_new(context)?;
-        let compile_context = compile::Context::from(module);
+        let symbols = compile::Context::from(module);
 
         Ok(Codegen {
             context,
             module,
             builder,
             types,
-            compile_context,
+            symbols,
         })
     }
 
@@ -70,10 +70,11 @@ impl Codegen {
         use crate::runtime::primitives::value::*;
 
         let types = &self.types;
-        let ctx = &mut self.compile_context;
+        let ctx = &mut self.symbols;
 
         ctx.with_sym(f!(prim__Value_new_num), types.ptr, &mut [types.u64]);
         ctx.with_sym(f!(prim__Value_nil), types.ptr, &mut []);
+        ctx.with_sym(f!(prim__Value_is_true), types.i1, &mut [types.ptr]);
 
         self
     }
@@ -127,7 +128,7 @@ mod tests {
         unsafe {
             Codegen::install_execution_targets();
 
-            let codegen = Codegen::try_new()
+            let mut codegen = Codegen::try_new()
                 .unwrap()
                 .install_error_handling()
                 .install_primitives();
@@ -144,7 +145,7 @@ mod tests {
 
             let engine = execution::ExecutionEngine::try_new(codegen.module)
                 .unwrap()
-                .add_primitive_symbols(&codegen.compile_context);
+                .add_primitive_symbols(&codegen.symbols);
 
             let f: extern "C" fn() -> ValueRef =
                 std::mem::transmute(engine.get_function_address("main"));

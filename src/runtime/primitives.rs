@@ -41,4 +41,16 @@ pub mod value {
             _ => panic!("prim__Value_tail: expected list, got {:?}", list),
         }
     }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn prim__Value_is_true(value: ValueRef) -> bool {
+        if value.is_num() {
+            value.num() != 0
+        } else {
+            match value.to_value() {
+                Value::Nil => false,
+                _ => true,
+            }
+        }
+    }
 }
