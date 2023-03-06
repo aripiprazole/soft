@@ -45,11 +45,8 @@ impl Display for Term {
 
                 write!(f, " (")?;
 
-                if !names.is_empty() {
-                    write!(f, "({} {})", names[0].0, names[0].1)?;
-                    for (name, val) in &names[1..] {
-                        write!(f, " ({} {})", name, val)?;
-                    }
+                for (name, value) in names {
+                    write!(f, " ({name} {value})")?;
                 }
 
                 write!(f, ") ")?;
@@ -57,7 +54,7 @@ impl Display for Term {
                 write!(f, ")")
             }
             Term::App(head, tail) => {
-                write!(f, "(~{}{})", head, Spaced(Mode::Before, " ", tail))
+                write!(f, "(~{head}{})", Spaced(Mode::Before, " ", tail))
             }
             Term::Closure(args, body) => {
                 let names: Vec<_> = args.iter().map(|x| format!("({} {})", x.0, x.1)).collect();
@@ -68,7 +65,7 @@ impl Display for Term {
                 )
             }
             Term::EnvRef(name) => {
-                write!(f, "(env-ref {})", name)
+                write!(f, "(env-ref {name})")
             }
             Term::Set(name, IsMacro::Yes, value) => {
                 write!(f, "(setm* {name} {value})")
@@ -77,7 +74,7 @@ impl Display for Term {
                 write!(f, "(set* {name} {value})")
             }
             Term::Call(head, tail) => {
-                write!(f, "({}{})", head, Spaced(Mode::Before, " ", tail))
+                write!(f, "({head}{})", Spaced(Mode::Before, " ", tail))
             }
             Term::LocalRef(n) => write!(f, "{n}"),
             Term::GlobalRef(n) => write!(f, "#{n}"),
@@ -146,10 +143,7 @@ impl Term {
                                 [value] => (name.clone(), value.clone()),
                                 _ => todo!(),
                             },
-                            _ => {
-                                dbg!(entry);
-                                todo!()
-                            }
+                            _ => todo!(),
                         })
                         .collect();
 
