@@ -31,9 +31,9 @@ impl Display for ValueRef {
             let value = unsafe { std::mem::transmute::<u64, &Value>(self.0) };
 
             match value {
-                Value::Cons(head, tail) => write!(f, "({} {})", head, tail),
                 Value::Nil => write!(f, "nil"),
-                Value::Atom(value) => write!(f, "{}", value),
+                Value::Atom(value) => write!(f, "{value}"),
+                Value::Cons(head, tail) => write!(f, "({head} {tail})"),
             }
         }
     }
