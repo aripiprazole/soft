@@ -60,7 +60,7 @@ impl Display for Term {
                 let names: Vec<_> = args.iter().map(|x| format!("({} {})", x.0, x.1)).collect();
                 write!(
                     f,
-                    "(mk-closure {body} ({}))",
+                    "(closure* {body} ({}))",
                     Spaced(Mode::Interperse, " ", &names)
                 )
             }
