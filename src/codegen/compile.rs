@@ -7,7 +7,12 @@ use std::mem::MaybeUninit;
 use super::*;
 
 #[derive(PartialEq, Eq, Clone)]
-pub struct SymbolRef(pub LLVMTypeRef, pub LLVMValueRef, pub *mut libc::c_void);
+pub struct SymbolRef {
+    pub value_type: LLVMTypeRef,
+    pub value: LLVMValueRef,
+    pub addr: *mut libc::c_void,
+    pub arity: Option<u32>,
+}
 
 pub struct Context {
     pub module: LLVMModuleRef,
@@ -33,7 +38,12 @@ impl Context {
 
         let func_t = unsafe { LLVMFunctionType(return_t, args.as_mut_ptr(), args.len() as _, 0) };
         let func = unsafe { LLVMAddFunction(self.module, cstr!(name), func_t) };
-        let symbol_ref = SymbolRef(func_t, func, addr);
+        let symbol_ref = SymbolRef {
+            value_type: func_t,
+            value: func,
+            addr,
+            arity: Some(args.len() as _),
+        };
 
         self.symbols.insert(name.to_string(), symbol_ref);
     }
@@ -117,7 +127,7 @@ impl Codegen {
     }
 
     unsafe fn call_prim(&self, name: &str, args: &mut [LLVMValueRef]) -> LLVMValueRef {
-        let SymbolRef(func_t, func, _) = *self
+        let symbol_ref = self
             .symbols
             .symbols
             .get(name)
@@ -125,8 +135,8 @@ impl Codegen {
 
         LLVMBuildCall2(
             self.builder,
-            func_t,
-            func,
+            symbol_ref.value_type,
+            symbol_ref.value,
             args.as_mut_ptr(),
             args.len() as u32,
             cstr!(),
