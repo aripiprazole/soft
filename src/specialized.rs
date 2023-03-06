@@ -38,18 +38,18 @@ where
     T: Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.0 {
-            Mode::Interperse => {
-                if !self.2.is_empty() {
-                    write!(f, "{}", self.2[0])?;
-                    for el in &self.2[1..] {
-                        write!(f, "{}{}", self.1, el)?;
+        match self {
+            Spaced(Mode::Interperse, string, slice) => {
+                if !slice.is_empty() {
+                    write!(f, "{}", slice[0])?;
+                    for element in &slice[1..] {
+                        write!(f, "{string}{element}")?;
                     }
                 }
             }
-            Mode::Before => {
-                for el in self.2 {
-                    write!(f, "{}{}", self.1, el)?;
+            Spaced(Mode::Before, string, slice) => {
+                for element in slice.iter() {
+                    write!(f, "{string}{element}")?;
                 }
             }
         }
