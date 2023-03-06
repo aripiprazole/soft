@@ -63,7 +63,7 @@ impl Codegen {
                 self.call_prim("prim__Value_new_num", &mut [x])
             }
             Term::Quote(_) => todo!(),
-            Term::Nil => todo!(),
+            Term::Nil => self.call_prim("prim__Value_nil", &mut []),
         }
     }
 
