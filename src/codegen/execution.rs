@@ -1,4 +1,4 @@
-use super::{compile::SymbolRef, *};
+use super::*;
 
 pub struct ExecutionEngine(pub *mut LLVMOpaqueExecutionEngine);
 
@@ -27,8 +27,8 @@ impl ExecutionEngine {
     }
 
     pub unsafe fn add_primitive_symbols(self, context: &compile::Context) -> Self {
-        for SymbolRef(_, sym, addr) in context.symbols.values() {
-            LLVMAddGlobalMapping(self.0, *sym, *addr);
+        for symbol_ref in context.symbols.values().into_iter() {
+            LLVMAddGlobalMapping(self.0, symbol_ref.value, symbol_ref.addr);
         }
 
         self
