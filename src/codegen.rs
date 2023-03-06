@@ -46,7 +46,7 @@ impl Codegen {
         let context = LLVMContextCreate();
         let module = LLVMModuleCreateWithNameInContext(cstr!("soft"), context);
         let builder = LLVMCreateBuilderInContext(context);
-        let types = types::Types::try_new(context)?;
+        let types = types::Types::from(context);
         let symbols = compile::Context::from(module);
 
         Ok(Codegen {
@@ -133,7 +133,7 @@ mod tests {
                 .install_error_handling()
                 .install_primitives();
 
-            codegen.compile_main(Term::Num(42));
+            codegen.compile_main(Term::Num(42)).unwrap();
             codegen.dump_module();
             codegen.verify_module().unwrap_or_else(|error| {
                 for line in error.split("\n") {
