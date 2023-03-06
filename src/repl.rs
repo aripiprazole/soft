@@ -17,7 +17,8 @@ pub fn run() {
                 if let Ok(term) = parsed {
                     let expr = crate::specialized::Term::specialize(term);
                     let converted = crate::conversion::convert(expr);
-                    println!("{}", converted);
+                    let res = crate::interpreter::interpret(Default::default(), converted);
+                    println!("{}", res);
                 } else {
                     println!("Cannot parse")
                 }

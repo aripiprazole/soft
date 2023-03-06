@@ -1,6 +1,7 @@
 #![feature(box_syntax, box_patterns)]
 
 pub mod conversion;
+pub mod interpreter;
 pub mod repl;
 pub mod runtime;
 pub mod specialized;
@@ -11,7 +12,7 @@ extern crate lalrpop_util;
 
 lalrpop_mod!(pub soft);
 
-pub use soft::TermParser as Parser;
+pub use crate::soft::TermParser as Parser;
 
 #[cfg(test)]
 mod tests {

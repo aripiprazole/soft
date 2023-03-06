@@ -141,6 +141,7 @@ impl Term {
             }
             Value::Atom(symbol) => Term::GlobalRef(symbol.clone()),
             Value::Nil => Term::Nil,
+            _ => panic!("cannot compile this"),
         }
     }
 

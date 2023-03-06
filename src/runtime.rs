@@ -1,10 +1,15 @@
 use std::fmt::{Debug, Display};
 
+use crate::specialized::Term;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Value {
     Cons(ValueRef, ValueRef),
     Atom(String),
     Nil,
+
+    HashMap(im::HashMap<String, ValueRef>),
+    Closure(im::HashMap<String, ValueRef>, Vec<String>, Term),
 }
 
 impl PartialEq for ValueRef {
@@ -34,6 +39,18 @@ impl Display for ValueRef {
                 Value::Cons(head, tail) => write!(f, "({} {})", head, tail),
                 Value::Nil => write!(f, "nil"),
                 Value::Atom(value) => write!(f, "{}", value),
+                Value::HashMap(v) => {
+                    write!(f, "#{{")?;
+                    if !v.is_empty() {
+                        let v = v.iter().collect::<Vec<_>>();
+                        write!(f, "({} => {})", v[0].0, v[0].1)?;
+                        for (v, t) in &v[1..] {
+                            write!(f, " ({v} => {t})")?;
+                        }
+                    }
+                    write!(f, "}}")
+                }
+                Value::Closure(_, _, _) => write!(f, "<fun>"),
             }
         }
     }
