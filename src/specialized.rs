@@ -26,90 +26,117 @@ pub enum Term {
     Nil,
 }
 
-impl Term {
-    pub fn specialize(value: ValueRef) -> Term {
-        if value.is_num() {
-            return Term::Num(value.num());
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct SpecializeError {
+    pub message: String,
+    pub r_source_line: u32,
+    pub r_source_column: u32,
+    pub r_source_file: String,
+}
+
+macro_rules! specialize_error {
+    ($message:expr) => {
+        Err(SpecializeError {
+            message: $message.to_string(),
+            r_source_line: line!(),
+            r_source_column: column!(),
+            r_source_file: file!().to_string(),
+        })
+    };
+}
+
+impl TryFrom<ValueRef> for Term {
+    type Error = SpecializeError;
+
+    fn try_from(value: ValueRef) -> Result<Self, Self::Error> {
+        value.specialize()
+    }
+}
+
+impl ValueRef {
+    pub fn specialize(&self) -> Result<Term, SpecializeError> {
+        if self.is_num() {
+            return Ok(Term::Num(self.num()));
         }
 
-        match value.to_value() {
+        match self.to_value() {
             Value::Cons(head, tail) if head.is_num() => {
-                let args = cons_to_list(*tail);
-                Term::App(box Term::specialize(*head), args)
+                let args = cons_to_list(*tail)?;
+                Ok(Term::App(box head.specialize()?, args))
             }
             Value::Cons(head, tail) => {
-                let args = cons_to_list(*tail);
+                let args = cons_to_list(*tail)?;
                 match head.to_value() {
-                    Value::Atom(symbol) => Term::specialize_cons(symbol, args),
-                    _ => Term::App(box Term::specialize(*head), args),
+                    Value::Atom(symbol) => Ok(specialize_cons(symbol, args)?),
+                    _ => Ok(Term::App(box head.specialize()?, args)),
                 }
             }
-            Value::Atom(symbol) => Term::GlobalRef(symbol.clone()),
-            Value::Nil => Term::Nil,
+            Value::Atom(symbol) => Ok(Term::GlobalRef(symbol.clone())),
+            Value::Nil => Ok(Term::Nil),
         }
     }
+}
 
-    fn specialize_cons(head: &str, tail: Vec<Term>) -> Term {
-        match head {
-            "set*" => match tail.as_slice() {
-                [Term::GlobalRef(name), value] => {
-                    Term::Set(name.clone(), IsMacro::No, box value.clone())
-                }
-                _ => todo!(),
-            },
-            "cons*" => match tail.as_slice() {
-                [head, tail] => Term::Cons(box head.clone(), box tail.clone()),
-                _ => todo!(),
-            },
-            "if" => match tail.as_slice() {
-                [cond, then_branch, else_branch] => Term::If(
-                    box cond.clone(),
-                    box then_branch.clone(),
-                    box else_branch.clone(),
-                ),
-                _ => todo!(),
-            },
-            "lambda" => match tail.as_slice() {
-                [Term::Nil, body] => Term::Lam(Lifted::No, vec![], box body.clone()),
-                [Term::App(box head, args), body] => {
-                    let arguments = vec![head.clone()]
-                        .iter()
-                        .chain(args.iter())
-                        .map(|arg| match arg {
-                            Term::GlobalRef(name) => name.clone(),
+fn specialize_cons(head: &str, tail: Vec<Term>) -> Result<Term, SpecializeError> {
+    match head {
+        "set*" => match tail.as_slice() {
+            [Term::GlobalRef(name), value] => {
+                Ok(Term::Set(name.clone(), IsMacro::No, box value.clone()))
+            }
+            _ => specialize_error!("Invalid set*"),
+        },
+        "cons*" => match tail.as_slice() {
+            [head, tail] => Ok(Term::Cons(box head.clone(), box tail.clone())),
+            _ => specialize_error!("Invalid cons*"),
+        },
+        "if" => match tail.as_slice() {
+            [cond, then_branch, else_branch] => Ok(Term::If(
+                box cond.clone(),
+                box then_branch.clone(),
+                box else_branch.clone(),
+            )),
+            _ => specialize_error!("Invalid if"),
+        },
+        "lambda" => match tail.as_slice() {
+            [Term::Nil, body] => Ok(Term::Lam(Lifted::No, vec![], box body.clone())),
+            [Term::App(box head, args), body] => {
+                let arguments = vec![head.clone()]
+                    .iter()
+                    .chain(args.iter())
+                    .map(|arg| match arg {
+                        Term::GlobalRef(name) => name.clone(),
+                        _ => todo!(),
+                    })
+                    .collect();
+
+                Ok(Term::Lam(Lifted::No, arguments, box body.clone()))
+            }
+            _ => specialize_error!("Invalid lambda"),
+        },
+        "let" => match tail.as_slice() {
+            [Term::Nil] => specialize_error!("Invalid let"),
+            [Term::App(box head, args), body] => {
+                let bindings = vec![head.clone()]
+                    .iter()
+                    .chain(args.iter())
+                    .map(|entry| match entry {
+                        Term::App(box Term::GlobalRef(name), value) => match value.as_slice() {
+                            [value] => (name.clone(), value.clone()),
                             _ => todo!(),
-                        })
-                        .collect();
+                        },
+                        _ => todo!(),
+                    })
+                    .collect();
 
-                    Term::Lam(Lifted::No, arguments, box body.clone())
-                }
-                _ => todo!(),
-            },
-            "let" => match tail.as_slice() {
-                [Term::Nil] => todo!(),
-                [Term::App(box head, args), body] => {
-                    let bindings = vec![head.clone()]
-                        .iter()
-                        .chain(args.iter())
-                        .map(|entry| match entry {
-                            Term::App(box Term::GlobalRef(name), value) => match value.as_slice() {
-                                [value] => (name.clone(), value.clone()),
-                                _ => todo!(),
-                            },
-                            _ => todo!(),
-                        })
-                        .collect();
-
-                    Term::Let(bindings, box body.clone())
-                }
-                _ => todo!(),
-            },
-            "quote" => match tail.as_slice() {
-                [value] => Term::Quote(box value.clone()),
-                _ => todo!(),
-            },
-            _ => Term::App(box Term::GlobalRef(head.to_owned()), tail),
-        }
+                Ok(Term::Let(bindings, box body.clone()))
+            }
+            _ => specialize_error!("Invalid let"),
+        },
+        "quote" => match tail.as_slice() {
+            [value] => Ok(Term::Quote(box value.clone())),
+            _ => specialize_error!("Invalid quote"),
+        },
+        _ => Ok(Term::App(box Term::GlobalRef(head.to_owned()), tail)),
     }
 }
 
@@ -185,16 +212,16 @@ impl Display for Term {
     }
 }
 
-fn cons_to_list(tail: ValueRef) -> Vec<Term> {
+fn cons_to_list(tail: ValueRef) -> Result<Vec<Term>, SpecializeError> {
     let mut list = vec![];
     let mut current = tail;
 
     while let Value::Cons(head, tail) = current.to_value() {
-        list.push(Term::specialize(*head));
+        list.push(head.specialize()?);
         current = *tail;
     }
 
-    list
+    Ok(list)
 }
 
 #[cfg(test)]
@@ -211,7 +238,7 @@ mod tests {
 
         let term = Term::App(box Term::Num(1), vec![Term::Num(2)]);
 
-        assert_eq!(Term::specialize(value), term);
+        assert_eq!(value.specialize().unwrap(), term);
     }
 
     #[test]
@@ -223,7 +250,7 @@ mod tests {
 
         let term = Term::App(box Term::Nil, vec![Term::Num(1)]);
 
-        assert_eq!(Term::specialize(value), term);
+        assert_eq!(value.specialize().unwrap(), term);
     }
 
     #[test]
@@ -238,7 +265,7 @@ mod tests {
 
         let term = Term::Set("n".to_string(), IsMacro::No, box Term::Num(1));
 
-        assert_eq!(Term::specialize(value), term);
+        assert_eq!(value.specialize().unwrap(), term);
     }
 
     #[test]
@@ -253,7 +280,7 @@ mod tests {
 
         let term = Term::Lam(Lifted::No, vec![], box Term::Num(1));
 
-        assert_eq!(Term::specialize(value), term);
+        assert_eq!(value.specialize().unwrap(), term);
     }
 
     #[test]
@@ -275,7 +302,7 @@ mod tests {
             box Term::Num(1),
         );
 
-        assert_eq!(Term::specialize(value), term);
+        assert_eq!(value.specialize().unwrap(), term);
     }
 
     #[test]
@@ -296,7 +323,7 @@ mod tests {
 
         let term = Term::Let(vec![("n".to_string(), Term::Num(1))], box Term::Num(1));
 
-        assert_eq!(Term::specialize(value), term);
+        assert_eq!(value.specialize().unwrap(), term);
     }
 
     #[test]
@@ -308,6 +335,6 @@ mod tests {
 
         let term = Term::Quote(box Term::GlobalRef("foo".to_string()));
 
-        assert_eq!(Term::specialize(value), term);
+        assert_eq!(value.specialize().unwrap(), term);
     }
 }

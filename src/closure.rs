@@ -8,6 +8,12 @@ pub struct Closure {
     pub subst: HashSet<String>,
 }
 
+impl Term {
+    pub fn convert(self) -> Self {
+        Closure::default().convert(self)
+    }
+}
+
 impl Closure {
     pub fn new(env: HashSet<String>, subst: HashSet<String>) -> Self {
         Self { env, subst }
@@ -113,10 +119,6 @@ impl Closure {
             Nil | Num(_) | LocalRef(_) | GlobalRef(_) => term,
         }
     }
-}
-
-pub fn convert(term: Term) -> Term {
-    Closure::convert(&mut Default::default(), term)
 }
 
 fn free_vars(term: &Term) -> im::HashSet<String> {
