@@ -60,7 +60,7 @@ pub extern "C" fn prim__Value_gep(ptr: ValueRef, index: u64) -> ValueRef {
     }
 
     match ptr.to_value() {
-        Value::Vec(ref items, _) => unsafe { items.add(index as _).read() },
+        Value::Vec(_, ref items) => unsafe { items.add(index as _).read() },
         _ => panic!("prim__Value_gep: expected pointer, got {ptr:?}"),
     }
 }

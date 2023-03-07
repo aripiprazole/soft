@@ -10,7 +10,7 @@ pub enum Value {
     Atom(String),
     Closure(ValueRef, ValueRef),
     Function(u8, *mut libc::c_void),
-    Vec(*mut ValueRef, usize),
+    Vec(usize, *mut ValueRef),
     Nil,
 }
 
@@ -43,7 +43,7 @@ impl Display for ValueRef {
                 Value::Cons(head, tail) => write!(f, "({head} {tail})"),
                 Value::Closure(env, t) => write!(f, "<closure: {env} {t}>"),
                 Value::Function(arity, _) => write!(f, "<function: {arity}>"),
-                Value::Vec(items, len) => {
+                Value::Vec(len, items) => {
                     let elems = unsafe {
                         std::ptr::slice_from_raw_parts(*items, *len)
                             .as_ref()
@@ -113,8 +113,8 @@ impl ValueRef {
         ValueRef::new(Value::Atom(value))
     }
 
-    pub fn vec(size: usize, items: *mut ValueRef) -> ValueRef {
-        ValueRef::new(Value::Vec(items, size))
+    pub fn vec(len: usize, items: *mut ValueRef) -> ValueRef {
+        ValueRef::new(Value::Vec(len, items))
     }
 
     pub fn closure(env: ValueRef, func: ValueRef) -> ValueRef {
