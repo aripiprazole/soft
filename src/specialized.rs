@@ -1,8 +1,9 @@
 use std::fmt::Display;
 
 use crate::{
+    macros::bool_enum,
     runtime::{Value, ValueRef},
-    util::{bool_enum, Mode, Spaced},
+    spaced::{Mode, Spaced},
 };
 
 bool_enum!(IsMacro);
