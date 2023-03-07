@@ -55,45 +55,47 @@ impl TryFrom<ValueRef> for Term {
 
 impl ValueRef {
     pub fn specialize(&self) -> Result<Term, SpecializeError> {
+        use Value::*;
+
         if self.is_num() {
             return Ok(Term::Num(self.num()));
         }
 
         match self.to_value() {
-            Value::Cons(head, tail) if head.is_num() => {
+            Cons(head, tail) if head.is_num() => {
                 let args = cons_to_list(*tail)?;
                 Ok(Term::App(box head.specialize()?, args))
             }
-            Value::Cons(head, tail) => {
+            Cons(head, tail) => {
                 let args = cons_to_list(*tail)?;
 
                 match head.to_value() {
-                    Value::Atom(symbol) if symbol == "quote" => Ok(Term::Quote(*tail)),
-                    Value::Atom(symbol) => Ok(specialize_cons(symbol, args)?),
+                    Atom(symbol) if symbol == "quote" => Ok(Term::Quote(*tail)),
+                    Atom(symbol) => Ok(specialize_cons(symbol, args)?),
                     _ => Ok(Term::App(box head.specialize()?, args)),
                 }
             }
-            Value::Atom(symbol) if symbol == "nil" => Ok(Term::Nil),
-            Value::Atom(symbol) => Ok(Term::GlobalRef(symbol.clone())),
-            Value::Nil => Ok(Term::Nil),
+            Atom(symbol) if symbol == "nil" => Ok(Term::Nil),
+            Atom(symbol) => Ok(Term::GlobalRef(symbol.clone())),
+            Nil => Ok(Term::Nil),
         }
     }
 }
 
 fn specialize_cons(head: &str, tail: Vec<Term>) -> Result<Term, SpecializeError> {
+    use Term::*;
+
     match head {
         "set*" => match tail.as_slice() {
-            [Term::GlobalRef(name), value] => {
-                Ok(Term::Set(name.clone(), IsMacro::No, box value.clone()))
-            }
+            [GlobalRef(name), value] => Ok(Set(name.clone(), IsMacro::No, box value.clone())),
             _ => specialize_error!("Invalid set*"),
         },
         "cons" => match tail.as_slice() {
-            [head, tail] => Ok(Term::Cons(box head.clone(), box tail.clone())),
+            [head, tail] => Ok(Cons(box head.clone(), box tail.clone())),
             _ => specialize_error!("Invalid cons*"),
         },
         "if" => match tail.as_slice() {
-            [cond, then_branch, else_branch] => Ok(Term::If(
+            [cond, then_branch, else_branch] => Ok(If(
                 box cond.clone(),
                 box then_branch.clone(),
                 box else_branch.clone(),
@@ -101,29 +103,29 @@ fn specialize_cons(head: &str, tail: Vec<Term>) -> Result<Term, SpecializeError>
             _ => specialize_error!("Invalid if"),
         },
         "lambda" => match tail.as_slice() {
-            [Term::Nil, body] => Ok(Term::Lam(Lifted::No, vec![], box body.clone())),
-            [Term::App(box head, args), body] => {
+            [Nil, body] => Ok(Lam(Lifted::No, vec![], box body.clone())),
+            [App(box head, args), body] => {
                 let arguments = vec![head.clone()]
                     .iter()
                     .chain(args.iter())
                     .map(|arg| match arg {
-                        Term::GlobalRef(name) => Ok(name.clone()),
+                        GlobalRef(name) => Ok(name.clone()),
                         _ => specialize_error!("Invalid lambda"),
                     })
                     .collect::<Result<Vec<_>, _>>()?;
 
-                Ok(Term::Lam(Lifted::No, arguments, box body.clone()))
+                Ok(Lam(Lifted::No, arguments, box body.clone()))
             }
             _ => specialize_error!("Invalid lambda"),
         },
         "let" => match tail.as_slice() {
-            [Term::Nil] => specialize_error!("Invalid let"),
-            [Term::App(box head, args), body] => {
+            [Nil] => specialize_error!("Invalid let"),
+            [App(box head, args), body] => {
                 let bindings = vec![head.clone()]
                     .iter()
                     .chain(args.iter())
                     .map(|entry| match entry {
-                        Term::App(box Term::GlobalRef(name), value) => match value.as_slice() {
+                        App(box GlobalRef(name), value) => match value.as_slice() {
                             [value] => Ok((name.clone(), value.clone())),
                             _ => specialize_error!("Invalid let binding"),
                         },
@@ -131,22 +133,24 @@ fn specialize_cons(head: &str, tail: Vec<Term>) -> Result<Term, SpecializeError>
                     })
                     .collect::<Result<Vec<_>, _>>()?;
 
-                Ok(Term::Let(bindings, box body.clone()))
+                Ok(Let(bindings, box body.clone()))
             }
             _ => specialize_error!("Invalid let"),
         },
         "nil" => match tail.as_slice() {
-            [] => Ok(Term::Nil),
+            [] => Ok(Nil),
             _ => specialize_error!("Invalid nil"),
         },
-        _ => Ok(Term::App(box Term::GlobalRef(head.to_owned()), tail)),
+        _ => Ok(App(box GlobalRef(head.to_owned()), tail)),
     }
 }
 
 impl Display for Term {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use Term::*;
+
         match self {
-            Term::Lam(lifted, names, body) => {
+            Lam(lifted, names, body) => {
                 write!(f, "(lambda")?;
 
                 if let Lifted::Yes = lifted {
@@ -159,7 +163,7 @@ impl Display for Term {
                 write!(f, "{body}")?;
                 write!(f, ")")
             }
-            Term::Let(names, next) => {
+            Let(names, next) => {
                 write!(f, "(let")?;
 
                 write!(f, " (")?;
@@ -172,10 +176,10 @@ impl Display for Term {
                 write!(f, "{next}")?;
                 write!(f, ")")
             }
-            Term::App(head, tail) => {
+            App(head, tail) => {
                 write!(f, "(~{head}{})", Spaced(Mode::Before, " ", tail))
             }
-            Term::Closure(args, body) => {
+            Closure(args, body) => {
                 let names: Vec<_> = args.iter().map(|x| format!("({} {})", x.0, x.1)).collect();
                 write!(
                     f,
@@ -183,30 +187,30 @@ impl Display for Term {
                     Spaced(Mode::Interperse, " ", &names)
                 )
             }
-            Term::EnvRef(name) => {
+            EnvRef(name) => {
                 write!(f, "(env-ref {name})")
             }
-            Term::Set(name, IsMacro::Yes, value) => {
+            Set(name, IsMacro::Yes, value) => {
                 write!(f, "(setm* {name} {value})")
             }
-            Term::Set(name, IsMacro::No, value) => {
+            Set(name, IsMacro::No, value) => {
                 write!(f, "(set* {name} {value})")
             }
-            Term::Call(head, tail) => {
+            Call(head, tail) => {
                 write!(f, "({head}{})", Spaced(Mode::Before, " ", tail))
             }
-            Term::LocalRef(n) => write!(f, "{n}"),
-            Term::GlobalRef(n) => write!(f, "#{n}"),
-            Term::Num(n) => write!(f, "{n}"),
-            Term::Quote(expr) => write!(f, "'{expr}"),
-            Term::Nil => write!(f, "nil"),
-            Term::If(cond, then_branch, else_branch) => {
+            LocalRef(n) => write!(f, "{n}"),
+            GlobalRef(n) => write!(f, "#{n}"),
+            Num(n) => write!(f, "{n}"),
+            Quote(expr) => write!(f, "'{expr}"),
+            Nil => write!(f, "nil"),
+            If(cond, then_branch, else_branch) => {
                 write!(f, "(if")?;
                 write!(f, " {cond}")?;
                 write!(f, " {then_branch}")?;
                 write!(f, " {else_branch})")
             }
-            Term::Cons(head, tail) => {
+            Cons(head, tail) => {
                 write!(f, "(cons*")?;
                 write!(f, " {head}")?;
                 write!(f, " {tail})")
