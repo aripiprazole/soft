@@ -28,7 +28,8 @@ pub struct Codegen {
     pub module: LLVMModuleRef,
     pub builder: LLVMBuilderRef,
     pub types: types::Types,
-    pub symbols: compile::Context,
+    pub current_fn: LLVMValueRef,
+    pub environment: compile::Environment,
 }
 
 impl Drop for Codegen {
@@ -47,14 +48,16 @@ impl Codegen {
         let module = LLVMModuleCreateWithNameInContext(cstr!("soft"), context);
         let builder = LLVMCreateBuilderInContext(context);
         let types = types::Types::from(context);
-        let symbols = compile::Context::from(module);
+        let environment = compile::Environment::from(module);
+        let current_fn = std::mem::zeroed();
 
         Ok(Codegen {
             context,
             module,
             builder,
             types,
-            symbols,
+            current_fn,
+            environment,
         })
     }
 
@@ -70,7 +73,7 @@ impl Codegen {
         use crate::runtime::primitives::value::*;
 
         let types = &self.types;
-        let ctx = &mut self.symbols;
+        let ctx = &mut self.environment;
 
         ctx.with_sym(f!(prim__Value_new_num), types.ptr, &mut [types.u64]);
         ctx.with_sym(f!(prim__Value_cons), types.ptr, &mut [types.ptr, types.ptr]);
@@ -146,7 +149,7 @@ mod tests {
 
             let engine = execution::ExecutionEngine::try_new(codegen.module)
                 .unwrap()
-                .add_primitive_symbols(&codegen.symbols);
+                .add_primitive_symbols(&codegen.environment);
 
             let f: extern "C" fn() -> ValueRef =
                 std::mem::transmute(engine.get_function_address("main"));

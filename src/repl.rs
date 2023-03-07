@@ -79,7 +79,7 @@ fn eval_line(line: String) -> Result<ValueRef, String> {
 
         let engine = execution::ExecutionEngine::try_new(codegen.module)
             .unwrap()
-            .add_primitive_symbols(&codegen.symbols);
+            .add_primitive_symbols(&codegen.environment);
 
         let f: extern "C" fn() -> ValueRef =
             std::mem::transmute(engine.get_function_address("main"));
