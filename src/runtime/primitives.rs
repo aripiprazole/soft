@@ -50,6 +50,25 @@ pub mod value {
             !matches!(value.to_value(), Value::Nil)
         }
     }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn prim__Value_new_closure(
+        env: *mut ValueRef,
+        env_len: u64,
+        body: ValueRef,
+    ) -> ValueRef {
+        let env = ValueRef::vec(std::slice::from_raw_parts(env, env_len as _).into());
+
+        ValueRef::closure(env, body)
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn prim__Value_function(
+        arity: u64,
+        function_ptr: *mut libc::c_void,
+    ) -> ValueRef {
+        ValueRef::function(arity as _, function_ptr)
+    }
 }
 
 pub mod global {

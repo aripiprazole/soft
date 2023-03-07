@@ -604,6 +604,7 @@ dependencies = [
  "llvm-sys",
  "regex",
  "rustyline",
+ "thin-vec",
 ]
 
 [[package]]
@@ -652,6 +653,12 @@ dependencies = [
  "rustversion",
  "winapi",
 ]
+
+[[package]]
+name = "thin-vec"
+version = "0.2.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aac81b6fd6beb5884b0cf3321b8117e6e5d47ecb6fc89f414cfdcca8b2fe2dd8"
 
 [[package]]
 name = "thiserror"

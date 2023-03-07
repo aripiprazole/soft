@@ -77,6 +77,7 @@ impl ValueRef {
             Atom(symbol) if symbol == "nil" => Ok(Term::Nil),
             Atom(symbol) => Ok(Term::GlobalRef(symbol.clone())),
             Nil => Ok(Term::Nil),
+            _ => specialize_error!("Invalid value"),
         }
     }
 }

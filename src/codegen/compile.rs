@@ -35,7 +35,47 @@ impl Codegen {
         let current = self.current_fn;
 
         match term {
-            Lam(_, _, _) => todo!(),
+            Lam(_, args, box body) => {
+                let old_block = LLVMGetInsertBlock(self.builder);
+
+                self.enter_scope();
+
+                let mut arg_types = vec![self.types.ptr; args.len()];
+                let function_type =
+                    LLVMFunctionType(self.types.ptr, arg_types.as_mut_ptr(), args.len() as _, 0);
+
+                let new_fn = LLVMAddFunction(self.module, cstr!(), function_type);
+                self.current_fn = new_fn;
+
+                let entry = LLVMAppendBasicBlock(new_fn, cstr!("entry"));
+                LLVMPositionBuilderAtEnd(self.builder, entry);
+
+                for (index, name) in args.iter().enumerate() {
+                    let alloca = LLVMBuildAlloca(self.builder, self.types.ptr, cstr!(name));
+                    let arg_value = LLVMGetParam(new_fn, index as _);
+                    LLVMBuildStore(self.builder, arg_value, alloca);
+
+                    let symbol_ref = SymbolRef::new(self.types.ptr, alloca);
+                    self.environment.symbols.insert(name.clone(), symbol_ref);
+                }
+
+                let body = self.compile_term(body)?;
+                LLVMBuildRet(self.builder, body);
+
+                self.pop_scope();
+                self.current_fn = current;
+                LLVMPositionBuilderAtEnd(self.builder, old_block);
+
+                let arity = LLVMConstInt(self.types.u64, args.len() as _, 0);
+                let new_fn = LLVMBuildPointerCast(
+                    self.builder,
+                    new_fn,
+                    LLVMPointerType(self.types.ptr, 0),
+                    cstr!(),
+                );
+
+                Ok(self.call_prim("prim__Value_function", &mut [arity, new_fn]))
+            }
             Let(entries, box body) => {
                 self.enter_scope();
 
@@ -55,7 +95,24 @@ impl Codegen {
                 Ok(body)
             }
             App(_, _) => todo!(),
-            Closure(_, _) => todo!(),
+            Closure(env, box body) => {
+                self.enter_scope();
+
+                let closure_environment = env
+                    .iter()
+                    .enumerate()
+                    .map(|(index, (name, _))| (name.clone(), index))
+                    .collect();
+
+                self.environment.closure = closure_environment;
+
+                let closure_environment = self.build_closure_environment(env)?;
+                let closure = self.build_closure(closure_environment, body)?;
+
+                self.pop_scope();
+
+                Ok(closure)
+            }
             EnvRef(_) => todo!(),
             LocalRef(sym) => {
                 let symbol = self
@@ -138,6 +195,47 @@ impl Codegen {
         }
     }
 
+    unsafe fn build_closure_environment(
+        &mut self,
+        env: Vec<(String, Term)>,
+    ) -> Result<LLVMValueRef, CompileError> {
+        let env_len = env.len() as u64;
+        let env_len = LLVMConstInt(self.types.u64, env_len, 0);
+
+        let env_value = LLVMBuildArrayAlloca(self.builder, self.types.ptr, env_len, cstr!());
+
+        for (index, (_, term)) in env.into_iter().enumerate() {
+            let value = self.compile_term(term)?;
+            let index = LLVMConstInt(self.types.u64, index as u64, 0);
+
+            let ptr = LLVMBuildGEP2(
+                self.builder,
+                self.types.ptr,
+                env_value,
+                [index].as_mut_ptr(),
+                1,
+                cstr!(),
+            );
+
+            LLVMBuildStore(self.builder, value, ptr);
+        }
+
+        Ok(env_value)
+    }
+
+    unsafe fn build_closure(
+        &mut self,
+        env: LLVMValueRef,
+        body: Term,
+    ) -> Result<LLVMValueRef, CompileError> {
+        let env_len = LLVMConstInt(self.types.u64, self.environment.closure.len() as _, 0);
+
+        let value = self.compile_term(body)?;
+        let closure = self.call_prim("prim__Value_new_closure", &mut [env, env_len, value]);
+
+        Ok(closure)
+    }
+
     unsafe fn build_if_true(&self, cond: LLVMValueRef) -> LLVMValueRef {
         let is_true = self.call_prim("prim__Value_is_true", &mut [cond]);
         let true_v = LLVMConstInt(self.types.i1, 1, 0);
@@ -191,6 +289,7 @@ impl SymbolRef {
 pub struct Environment {
     pub module: LLVMModuleRef,
     pub symbols: HashMap<String, SymbolRef>,
+    pub closure: HashMap<String, usize>,
     pub super_environment: Box<Option<Environment>>,
 }
 
@@ -198,6 +297,7 @@ impl From<LLVMModuleRef> for Environment {
     fn from(module: LLVMModuleRef) -> Self {
         Self {
             module,
+            closure: HashMap::new(),
             symbols: HashMap::new(),
             super_environment: box None,
         }
@@ -212,6 +312,7 @@ impl Codegen {
             module: self.module,
             symbols: self.environment.symbols.clone(),
             super_environment: box Some(self.environment.clone()),
+            closure: Default::default(),
         };
     }
 
