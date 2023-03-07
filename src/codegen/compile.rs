@@ -52,7 +52,7 @@ impl Codegen {
                 LLVMPositionBuilderAtEnd(self.builder, entry);
 
                 for (index, name) in args.iter().enumerate() {
-                    let alloca = LLVMBuildAlloca(self.builder, self.types.ptr, cstr!(name));
+                    let alloca = LLVMBuildAlloca(self.builder, self.types.ptr, cstr!());
                     let arg_value = LLVMGetParam(new_fn, index as _);
                     LLVMBuildStore(self.builder, arg_value, alloca);
 
@@ -95,7 +95,164 @@ impl Codegen {
 
                 Ok(body)
             }
-            App(_, _) => todo!(),
+
+            // given fn;
+            // let address = fn-address(fn);
+            // if address != null {
+            //     if !fn-arity(fn) == args.len() {
+            //         panic!(bla)
+            //     } else {
+            //         let fn-ptr = cast (ptr (...args)) address;
+            //         return fn-ptr(...args)
+            //     }
+            // } else {
+            //     let env = closure-get-env(fn);
+            //     if env != null {
+            //         address = closure-get-fn(fn);
+            //         if address != null {
+            //             if !fn-arity(fn) == args.len() {
+            //                 panic!(bla)
+            //             } else {
+            //                 let fn-ptr = cast (ptr (...args, #env)) address;
+            //                 return fn-ptr(...args, #env)
+            //             }
+            //         }
+            //     }
+            //     panic!("not a function")
+            // }
+
+            //     fn = compile-term(callee);
+            //     address = fn-address(fn);
+            //     res = cmp equal address 0
+            //     branch res %else %is_fun
+            // %is_fun:
+            //     call check_arity(fn, !args.len())
+            //     cast
+            //     call
+            // %else:
+            //     env = closure-get-env(fn)
+            //     res = cmp equal env 0
+            //     branch res %else %closure
+            // %closure:
+            //      fn' = closure-get-fn(fn);
+            //      call check_arity(fn', !args.len() + 1)
+            //      cast + #env
+            //      call + #env
+            // %else:
+            //     panic!
+            // %next:
+            //     %0 = phi [closure, is_fun]
+            App(box callee, args) => {
+                let is_fun = LLVMAppendBasicBlockInContext(self.context, current, cstr!());
+                let else_br = LLVMAppendBasicBlockInContext(self.context, current, cstr!());
+                let is_closure = LLVMAppendBasicBlockInContext(self.context, current, cstr!());
+                let else_panic = LLVMAppendBasicBlockInContext(self.context, current, cstr!());
+
+                let next = LLVMAppendBasicBlockInContext(self.context, current, cstr!());
+
+                let args_len = LLVMConstInt(self.types.u64, args.len() as _, 0);
+
+                let callee_value = self.compile_term(callee)?;
+
+                let address = self.call_prim("prim__check_arity", &mut [callee_value, args_len]);
+                let is_true = self.call_prim("prim__is_null", &mut [address]);
+
+                LLVMBuildCondBr(self.builder, is_true, else_br, is_fun);
+
+                LLVMPositionBuilderAtEnd(self.builder, is_fun);
+
+                let mut args_t = vec![self.types.ptr; args.len()];
+                let call_t =
+                    LLVMFunctionType(self.types.ptr, args_t.as_mut_ptr(), args.len() as _, 0);
+
+                let fn_ptr = LLVMBuildPointerCast(
+                    self.builder,
+                    address,
+                    LLVMPointerType(call_t, 0),
+                    cstr!(),
+                );
+
+                let mut args_value = vec![];
+
+                for n in args.clone() {
+                    args_value.push(self.compile_term(n)?);
+                }
+
+                let res2 = LLVMBuildCall2(
+                    self.builder,
+                    call_t,
+                    fn_ptr,
+                    args_value.as_mut_ptr(),
+                    args_value.len() as u32,
+                    cstr!(),
+                );
+
+                LLVMBuildBr(self.builder, next);
+
+                LLVMPositionBuilderAtEnd(self.builder, else_br);
+
+                let fun = self.call_prim("prim__closure_get_fn", &mut [callee_value]);
+                let is_true = self.call_prim("prim__is_null", &mut [fun]);
+                LLVMBuildCondBr(self.builder, is_true, else_panic, is_closure);
+
+                LLVMPositionBuilderAtEnd(self.builder, is_closure);
+
+                let args_len = LLVMConstInt(self.types.u64, (args.len() + 1) as _, 0);
+                let address = self.call_prim("prim__check_arity", &mut [fun, args_len]);
+
+                let env = self.call_prim("prim__closure_get_env", &mut [callee_value]);
+
+                let mut args_value = vec![];
+
+                for n in args {
+                    args_value.push(self.compile_term(n)?);
+                }
+
+                args_value.push(env);
+
+                let mut args_t = vec![self.types.ptr; args_value.len()];
+                let call_t = LLVMFunctionType(
+                    self.types.ptr,
+                    args_t.as_mut_ptr(),
+                    args_value.len() as _,
+                    0,
+                );
+
+                let fn_ptr = LLVMBuildPointerCast(
+                    self.builder,
+                    address,
+                    LLVMPointerType(call_t, 0),
+                    cstr!(),
+                );
+
+                let res1 = LLVMBuildCall2(
+                    self.builder,
+                    call_t,
+                    fn_ptr,
+                    args_value.as_mut_ptr(),
+                    args_value.len() as u32,
+                    cstr!(),
+                );
+
+                LLVMBuildBr(self.builder, next);
+
+                LLVMPositionBuilderAtEnd(self.builder, else_panic);
+
+                LLVMBuildUnreachable(self.builder);
+
+                LLVMPositionBuilderAtEnd(self.builder, next);
+
+                let phi = LLVMBuildPhi(self.builder, self.types.ptr, cstr!());
+
+                LLVMAddIncoming(
+                    phi,
+                    [res2, res1].as_mut_ptr(),
+                    [is_fun, is_closure].as_mut_ptr(),
+                    2,
+                );
+
+                Ok(phi)
+            }
             Closure(env, box body) => {
                 self.enter_scope();
 
@@ -121,14 +278,10 @@ impl Codegen {
                     .get(&sym)
                     .ok_or_else(|| CompileError::UndefinedEnvRef(sym.clone()))?;
 
-                let env_param = self
-                    .environment
-                    .symbols
-                    .get("#env")
-                    .ok_or_else(|| CompileError::UndefinedLocalRef(sym.clone()))?;
+                let env_param = LLVMGetLastParam(current);
 
                 let index_value = LLVMConstInt(self.types.u64, *index as _, 0);
-                let value = self.call_prim("prim__Value_gep", &mut [env_param.value, index_value]);
+                let value = self.call_prim("prim__Value_gep", &mut [env_param, index_value]);
 
                 Ok(value)
             }
@@ -226,6 +379,7 @@ impl Codegen {
             let value = self.compile_term(term)?;
             let index = LLVMConstInt(self.types.u64, index as u64, 0);
 
+            
             let ptr = LLVMBuildGEP2(
                 self.builder,
                 self.types.ptr,
@@ -234,7 +388,7 @@ impl Codegen {
                 1,
                 cstr!(),
             );
-
+            
             LLVMBuildStore(self.builder, value, ptr);
         }
 

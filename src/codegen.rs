@@ -80,6 +80,8 @@ impl Codegen {
     pub unsafe fn install_primitives(mut self) -> Self {
         use crate::runtime::primitives::global::*;
         use crate::runtime::primitives::value::*;
+        use crate::runtime::primitives::closure::*;
+        use crate::runtime::primitives::fun::*;
 
         let types = &self.types;
         let ctx = &mut self.environment;
@@ -98,6 +100,14 @@ impl Codegen {
 
         ctx.with(f!(prim__global_get), types.ptr, [types.ptr, types.ptr]);
         ctx.with(f!(prim__global_set), types.ptr, [types.ptr; 3]);
+
+        ctx.with(f!(prim__fn_addr), types.ptr, [types.ptr]);
+        ctx.with(f!(prim__check_arity), types.ptr, [types.ptr, types.u64]);
+        ctx.with(f!(prim__closure_get_env), types.ptr, [types.ptr]);
+        ctx.with(f!(prim__closure_get_fn), types.ptr, [types.ptr]);
+        ctx.with(f!(prim__is_null), types.i1, [types.ptr]);
+        ctx.with(f!(prim__panic), types.ptr, []);
+
 
         self
     }
