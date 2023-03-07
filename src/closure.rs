@@ -1,4 +1,4 @@
-use im::HashSet;
+use im::{hashset, HashSet};
 
 use crate::specialized::{Lifted, Term};
 
@@ -35,7 +35,7 @@ impl Closure {
 
         match term {
             EnvRef(name) => EnvRef(name),
-            Quote(box quoted) => Quote(box self.convert(quoted)),
+            Quote(quoted) => Quote(quoted),
             Set(name, is_macro, box value) => Set(name, is_macro, box self.convert(value)),
             LocalRef(symbol) | GlobalRef(symbol) if self.subst.contains(&symbol) => EnvRef(symbol),
             GlobalRef(symbol) if self.env.contains(&symbol) => LocalRef(symbol),
@@ -128,7 +128,6 @@ fn free_vars(term: &Term) -> im::HashSet<String> {
         Closure(_, lam) => free_vars(lam).iter().collect(),
         Set(_, _, value) => free_vars(value),
         Call(_, args) => args.iter().flat_map(free_vars).collect(),
-        Quote(quoted) => free_vars(quoted),
         GlobalRef(name) | LocalRef(name) => HashSet::from_iter([name.clone()]),
         App(callee, args) => free_vars(callee).union(args.iter().flat_map(free_vars).collect()),
         Cons(head, tail) => free_vars(head).union(free_vars(tail)),
@@ -160,7 +159,7 @@ fn free_vars(term: &Term) -> im::HashSet<String> {
 
             body_fv.union(fv)
         }
-        EnvRef(_) | Num(_) | Nil => Default::default(),
+        Quote(_) | EnvRef(_) | Num(_) | Nil => Default::default(),
     }
 }
 
