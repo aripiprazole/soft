@@ -16,7 +16,6 @@ pub enum Term {
     Closure(Vec<(String, Term)>, Box<Term>),
     EnvRef(String),
     Set(String, IsMacro, Box<Term>),
-    Call(u64, Vec<Term>),
     LocalRef(String),
     GlobalRef(String),
     Num(u64),
@@ -195,9 +194,6 @@ impl Display for Term {
             }
             Set(name, IsMacro::No, value) => {
                 write!(f, "(set* {name} {value})")
-            }
-            Call(head, tail) => {
-                write!(f, "({head}{})", Spaced(Mode::Before, " ", tail))
             }
             LocalRef(n) => write!(f, "{n}"),
             GlobalRef(n) => write!(f, "#{n}"),

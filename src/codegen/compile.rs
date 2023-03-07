@@ -57,7 +57,6 @@ impl Codegen {
             App(_, _) => todo!(),
             Closure(_, _) => todo!(),
             EnvRef(_) => todo!(),
-            Call(_, _) => todo!(),
             LocalRef(sym) => {
                 let symbol = self
                     .environment

@@ -45,10 +45,6 @@ impl Closure {
                 box self.convert(else_branch),
             ),
             Cons(box head, box tail) => Term::Cons(box self.convert(head), box self.convert(tail)),
-            Call(address, args) => Call(
-                address,
-                args.into_iter().map(|arg| self.convert(arg)).collect(),
-            ),
             Closure(env_values, box lam) => {
                 let env_values = env_values
                     .into_iter()
@@ -71,7 +67,7 @@ impl Closure {
 
                 Lam(Lifted::Yes, args, body)
             }
-            Lam(Lifted::No, args, box body) => {
+            Lam(Lifted::No, mut args, box body) => {
                 let mut closure = self.extend();
 
                 closure.env.extend(args.iter().cloned());
@@ -95,6 +91,8 @@ impl Closure {
                         .iter()
                         .map(|name| (name.clone(), LocalRef(name.clone())))
                         .collect();
+
+                    args.push("#env".to_string());
 
                     Closure(env_values, box Lam(Lifted::Yes, args, body))
                 };
@@ -127,7 +125,6 @@ fn free_vars(term: &Term) -> im::HashSet<String> {
     match term {
         Closure(_, lam) => free_vars(lam).iter().collect(),
         Set(_, _, value) => free_vars(value),
-        Call(_, args) => args.iter().flat_map(free_vars).collect(),
         GlobalRef(name) | LocalRef(name) => HashSet::from_iter([name.clone()]),
         App(callee, args) => free_vars(callee).union(args.iter().flat_map(free_vars).collect()),
         Cons(head, tail) => free_vars(head).union(free_vars(tail)),
