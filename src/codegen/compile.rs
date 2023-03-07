@@ -90,7 +90,7 @@ impl Codegen {
 pub struct SymbolRef {
     pub value_type: LLVMTypeRef,
     pub value: LLVMValueRef,
-    pub addr: *mut libc::c_void,
+    pub addr: AnyPtr,
     pub arity: Option<u16>,
 }
 

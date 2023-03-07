@@ -1,3 +1,5 @@
+use crate::runtime::primitives::AnyPtr;
+
 use super::*;
 
 pub struct ExecutionEngine(pub *mut LLVMOpaqueExecutionEngine);
@@ -41,7 +43,7 @@ impl ExecutionEngine {
 
     pub fn install_global_environment(self, codegen: &Codegen) -> Self {
         unsafe {
-            let global_environment = codegen.global_environment as *mut libc::c_void;
+            let global_environment = codegen.global_environment as AnyPtr;
             let global_sym = LLVMGetNamedGlobal(codegen.module, cstr!("global"));
 
             LLVMAddGlobalMapping(self.0, global_sym, global_environment);

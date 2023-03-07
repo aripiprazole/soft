@@ -2,6 +2,8 @@ use std::fmt::{Debug, Display};
 
 use crate::spaced::{Mode, Spaced};
 
+use self::primitives::AnyPtr;
+
 pub mod primitives;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -9,7 +11,7 @@ pub enum Value {
     Cons(ValueRef, ValueRef),
     Atom(String),
     Closure(ValueRef, ValueRef),
-    Function(u8, *mut libc::c_void),
+    Function(u8, primitives::AnyPtr),
     Vec(usize, *mut ValueRef),
     Nil,
 }
@@ -121,7 +123,7 @@ impl ValueRef {
         ValueRef::new(Value::Closure(env, func))
     }
 
-    pub fn function(arity: u8, addr: *mut libc::c_void) -> ValueRef {
+    pub fn function(arity: u8, addr: AnyPtr) -> ValueRef {
         ValueRef::new(Value::Function(arity, addr))
     }
 }
