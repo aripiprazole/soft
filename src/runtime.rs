@@ -64,7 +64,7 @@ pub struct ValueRef(pub u64);
 
 impl ValueRef {
     pub fn new(value: Value) -> ValueRef {
-        let ptr = Box::leak(box value);
+        let ptr = Box::leak(Box::new(value));
         ValueRef((ptr as *const Value as u64) | 1)
     }
 
