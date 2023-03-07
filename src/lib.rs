@@ -2,10 +2,11 @@
 #![feature(mem_copy_fn)]
 pub mod closure;
 pub mod codegen;
+pub mod macros;
 pub mod repl;
 pub mod runtime;
+pub mod spaced;
 pub mod specialized;
-pub mod util;
 
 #[macro_use]
 extern crate lalrpop_util;

@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-use crate::util::{Mode, Spaced};
+use crate::spaced::{Mode, Spaced};
 
 pub mod primitives;
 

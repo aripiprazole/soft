@@ -7,7 +7,7 @@ use llvm_sys::{
     LLVMDiagnosticSeverity::{LLVMDSError, LLVMDSNote, LLVMDSRemark, LLVMDSWarning},
 };
 
-use crate::util::{cstr, llvm_wrapper};
+use crate::macros::{cstr, llvm_wrapper};
 
 pub use llvm_sys::{core::*, execution_engine::*, prelude::*};
 
