@@ -104,10 +104,10 @@ fn specialize_cons(head: &str, tail: Vec<Term>) -> Result<Term, SpecializeError>
                     .iter()
                     .chain(args.iter())
                     .map(|arg| match arg {
-                        Term::GlobalRef(name) => name.clone(),
-                        _ => todo!(),
+                        Term::GlobalRef(name) => Ok(name.clone()),
+                        _ => specialize_error!("Invalid lambda"),
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 Ok(Term::Lam(Lifted::No, arguments, box body.clone()))
             }
@@ -121,12 +121,12 @@ fn specialize_cons(head: &str, tail: Vec<Term>) -> Result<Term, SpecializeError>
                     .chain(args.iter())
                     .map(|entry| match entry {
                         Term::App(box Term::GlobalRef(name), value) => match value.as_slice() {
-                            [value] => (name.clone(), value.clone()),
-                            _ => todo!(),
+                            [value] => Ok((name.clone(), value.clone())),
+                            _ => specialize_error!("Invalid let binding"),
                         },
-                        _ => todo!(),
+                        _ => specialize_error!("Invalid let binding"),
                     })
-                    .collect();
+                    .collect::<Result<Vec<_>, _>>()?;
 
                 Ok(Term::Let(bindings, box body.clone()))
             }
