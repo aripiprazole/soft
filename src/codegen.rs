@@ -11,8 +11,11 @@ use crate::util::{cstr, llvm_wrapper};
 
 pub use llvm_sys::{core::*, execution_engine::*, prelude::*};
 
+use self::jit::GlobalEnvironment;
+
 pub mod compile;
 pub mod execution;
+pub mod jit;
 pub mod types;
 
 pub type CodegenError = String;
@@ -30,6 +33,7 @@ pub struct Codegen {
     pub types: types::Types,
     pub current_fn: LLVMValueRef,
     pub environment: compile::Environment,
+    pub global_environment: *mut GlobalEnvironment,
 }
 
 impl Drop for Codegen {
@@ -58,6 +62,7 @@ impl Codegen {
             types,
             current_fn,
             environment,
+            global_environment: Box::leak(Box::new(Default::default())),
         })
     }
 
