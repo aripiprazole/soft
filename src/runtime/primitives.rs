@@ -57,7 +57,9 @@ pub mod value {
         env_len: u64,
         body: ValueRef,
     ) -> ValueRef {
-        let env = ValueRef::vec(std::slice::from_raw_parts(env, env_len as _).into());
+        let slice = std::slice::from_raw_parts_mut(env, env_len as _);
+        let leaked_env = Box::leak(box slice.as_mut_ptr().clone());
+        let env = ValueRef::vec(*leaked_env);
 
         ValueRef::closure(env, body)
     }
@@ -68,6 +70,18 @@ pub mod value {
         function_ptr: *mut libc::c_void,
     ) -> ValueRef {
         ValueRef::function(arity as _, function_ptr)
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn prim__Value_gep(ptr: ValueRef, index: u64) -> ValueRef {
+        if ptr.is_num() {
+            panic!("prim__Value_gep: expected pointer, got number");
+        }
+
+        match ptr.to_value() {
+            Value::Vec(ref items) => items.add(index as _).read(),
+            _ => panic!("prim__Value_gep: expected pointer, got {:?}", ptr),
+        }
     }
 }
 
