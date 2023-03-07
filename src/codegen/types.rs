@@ -10,6 +10,7 @@ pub struct Types {
 }
 
 impl From<LLVMContextRef> for Types {
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn from(context: LLVMContextRef) -> Self {
         unsafe {
             Self {
