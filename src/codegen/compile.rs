@@ -1,6 +1,6 @@
 use im::HashMap;
 
-use crate::specialized::Term;
+use crate::{runtime::primitives::AnyPtr, specialized::Term};
 use llvm_sys::LLVMIntPredicate::LLVMIntEQ;
 
 use super::*;
@@ -62,6 +62,19 @@ impl Codegen {
         }
     }
 
+    pub fn enter_scope(&mut self) {
+        self.environment = Environment {
+            module: self.module,
+            closure: self.environment.closure.clone(),
+            symbols: self.environment.symbols.clone(),
+            super_environment: box Some(self.environment.clone()),
+        };
+    }
+
+    pub fn pop_scope(&mut self) {
+        self.environment = self.environment.super_environment.clone().unwrap();
+    }
+
     unsafe fn delete_main_if_exists(&self) {
         unsafe {
             let main = LLVMGetNamedFunction(self.module, cstr!("main"));
@@ -90,11 +103,6 @@ impl SymbolRef {
             arity: None,
         }
     }
-
-    pub fn with_arity(mut self, arity: u16) -> Self {
-        self.arity = Some(arity);
-        self
-    }
 }
 
 #[derive(Clone)]
@@ -116,22 +124,7 @@ impl From<LLVMModuleRef> for Environment {
     }
 }
 
-type FunctionRef<'a> = (&'a str, *mut libc::c_void);
-
-impl Codegen {
-    pub fn enter_scope(&mut self) {
-        self.environment = Environment {
-            module: self.module,
-            closure: self.environment.closure.clone(),
-            symbols: self.environment.symbols.clone(),
-            super_environment: box Some(self.environment.clone()),
-        };
-    }
-
-    pub fn pop_scope(&mut self) {
-        self.environment = self.environment.super_environment.clone().unwrap();
-    }
-}
+type FunctionRef<'a> = (&'a str, AnyPtr);
 
 impl Environment {
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
