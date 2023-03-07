@@ -6,25 +6,30 @@ use crate::{
     runtime::ValueRef,
 };
 
-pub fn run() {
+pub fn run(options: &crate::cli::Options) {
     Codegen::install_execution_targets();
 
-    let mut rl = DefaultEditor::new().expect("cannot create a repl");
+    let mut editor = DefaultEditor::new().expect("cannot create a repl");
 
     let global_environment = Box::leak(Box::default());
 
     loop {
-        let readline = rl.readline("> ");
+        let readline = editor.readline("> ");
 
         match readline {
             Ok(line) => {
-                rl.add_history_entry(line.as_str())
+                editor
+                    .add_history_entry(line.as_str())
                     .expect("cannot add to the history");
 
                 let mut codegen = Codegen::new(global_environment)
                     .install_error_handling()
                     .install_primitives()
                     .install_global_environment();
+
+                if options.debug {
+                    codegen.dump_module();
+                }
 
                 let engine = ExecutionEngine::try_new(codegen.module)
                     .unwrap()
@@ -79,7 +84,6 @@ fn eval_line(
         .compile_main(converted)
         .map_err(|err| format!("[error] Could not compile expression: {err:?}"))?;
 
-    codegen.dump_module();
     codegen.verify_module().unwrap_or_else(|error| {
         for line in error.split('\n') {
             println!("[error*] {}", line);
