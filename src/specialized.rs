@@ -20,7 +20,7 @@ pub enum Term {
     LocalRef(String),
     GlobalRef(String),
     Num(u64),
-    Quote(Box<Term>),
+    Quote(ValueRef),
     If(Box<Term>, Box<Term>, Box<Term>),
     Cons(Box<Term>, Box<Term>),
     Nil,
@@ -133,7 +133,7 @@ fn specialize_cons(head: &str, tail: Vec<Term>) -> Result<Term, SpecializeError>
             _ => specialize_error!("Invalid let"),
         },
         "quote" => match tail.as_slice() {
-            [value] => Ok(Term::Quote(box value.clone())),
+            [value] => Ok(value.clone()),
             _ => specialize_error!("Invalid quote"),
         },
         _ => Ok(Term::App(box Term::GlobalRef(head.to_owned()), tail)),
@@ -333,7 +333,7 @@ mod tests {
             ValueRef::cons(ValueRef::atom("foo".to_string()), ValueRef::nil()),
         );
 
-        let term = Term::Quote(box Term::GlobalRef("foo".to_string()));
+        let term = Term::Quote(ValueRef::atom("foo".to_string()));
 
         assert_eq!(value.specialize().unwrap(), term);
     }
