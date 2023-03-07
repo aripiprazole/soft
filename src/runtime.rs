@@ -49,8 +49,20 @@ impl ValueRef {
         self.0 & 1 == 1
     }
 
+    pub fn is_nil(&self) -> bool {
+        self.maybe().map_or(false, |value| value == &Value::Nil)
+    }
+
     pub fn num(&self) -> u64 {
         self.0 >> 1
+    }
+
+    pub fn maybe(&self) -> Option<&Value> {
+        if self.is_num() {
+            None
+        } else {
+            Some(self.to_value())
+        }
     }
 
     pub fn nil() -> ValueRef {

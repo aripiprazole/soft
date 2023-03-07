@@ -66,7 +66,9 @@ impl ValueRef {
             }
             Value::Cons(head, tail) => {
                 let args = cons_to_list(*tail)?;
+
                 match head.to_value() {
+                    Value::Atom(symbol) if symbol == "quote" => Ok(Term::Quote(*tail)),
                     Value::Atom(symbol) => Ok(specialize_cons(symbol, args)?),
                     _ => Ok(Term::App(box head.specialize()?, args)),
                 }
@@ -132,10 +134,6 @@ fn specialize_cons(head: &str, tail: Vec<Term>) -> Result<Term, SpecializeError>
                 Ok(Term::Let(bindings, box body.clone()))
             }
             _ => specialize_error!("Invalid let"),
-        },
-        "quote" => match tail.as_slice() {
-            [value] => Ok(value.clone()),
-            _ => specialize_error!("Invalid quote"),
         },
         "nil" => match tail.as_slice() {
             [] => Ok(Term::Nil),
@@ -335,7 +333,7 @@ mod tests {
     fn test_specialize_cons_matching_quote() {
         let value = ValueRef::cons(
             ValueRef::atom("quote".to_string()),
-            ValueRef::cons(ValueRef::atom("foo".to_string()), ValueRef::nil()),
+            ValueRef::atom("foo".to_string()),
         );
 
         let term = Term::Quote(ValueRef::atom("foo".to_string()));
