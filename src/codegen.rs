@@ -136,7 +136,7 @@ mod tests {
     fn test_codegen() {
         Codegen::install_execution_targets();
 
-        let global_environment = Box::leak(Box::new(Default::default()));
+        let global_environment = Box::leak(Box::default());
 
         let mut codegen = Codegen::new(global_environment)
             .install_error_handling()
@@ -146,7 +146,7 @@ mod tests {
         codegen.compile_main(Term::Num(42)).unwrap();
         codegen.dump_module();
         codegen.verify_module().unwrap_or_else(|error| {
-            for line in error.split("\n") {
+            for line in error.split('\n') {
                 println!("[error*] {}", line);
             }
 

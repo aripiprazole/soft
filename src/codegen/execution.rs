@@ -30,7 +30,7 @@ impl ExecutionEngine {
 
     pub fn install_primitive_symbols(self, context: &compile::Environment) -> Self {
         unsafe {
-            for symbol_ref in context.symbols.values().into_iter() {
+            for symbol_ref in context.symbols.values() {
                 LLVMAddGlobalMapping(self.0, symbol_ref.value, symbol_ref.addr);
             }
 

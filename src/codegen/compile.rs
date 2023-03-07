@@ -49,7 +49,7 @@ impl Codegen {
                 .environment
                 .symbols
                 .get(name)
-                .expect(&format!("No such primitive: {name}"));
+                .unwrap_or_else(|| panic!("No such primitive: {name}"));
 
             LLVMBuildCall2(
                 self.builder,

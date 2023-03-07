@@ -180,7 +180,7 @@ pub mod global {
                 .unwrap()
                 .symbols
                 .get(rust_name.as_ref())
-                .expect(&format!("prim__global_get: symbol {rust_name} not found"));
+                .unwrap_or_else(|| panic!("prim__global_get: symbol {rust_name} not found"));
 
             global_ref.addr
         }

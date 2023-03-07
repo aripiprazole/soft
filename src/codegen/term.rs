@@ -15,7 +15,7 @@ impl Codegen {
                 Quote(_) => todo!(),
                 Nil => Ok(self.make_call("prim__Value_nil", &mut [])),
                 Num(n) => {
-                    let x = LLVMConstInt(self.types.u64, n as u64, 0);
+                    let x = LLVMConstInt(self.types.u64, n, 0);
                     Ok(self.make_call("prim__Value_new_num", &mut [x]))
                 }
                 Cons(box head, box tail) => {
@@ -44,7 +44,7 @@ impl Codegen {
                         .environment
                         .symbols
                         .get(&sym)
-                        .ok_or_else(|| CompileError::UndefinedLocalRef(sym))?;
+                        .ok_or(CompileError::UndefinedLocalRef(sym))?;
 
                     let value =
                         LLVMBuildLoad2(self.builder, symbol.value_type, symbol.value, cstr!());

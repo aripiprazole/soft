@@ -11,7 +11,7 @@ pub fn run() {
 
     let mut rl = DefaultEditor::new().expect("cannot create a repl");
 
-    let global_environment = Box::leak(Box::new(Default::default()));
+    let global_environment = Box::leak(Box::default());
 
     loop {
         let readline = rl.readline("> ");
@@ -81,7 +81,7 @@ fn eval_line(
 
     codegen.dump_module();
     codegen.verify_module().unwrap_or_else(|error| {
-        for line in error.split("\n") {
+        for line in error.split('\n') {
             println!("[error*] {}", line);
         }
 
