@@ -73,6 +73,7 @@ impl Codegen {
         let ctx = &mut self.symbols;
 
         ctx.with_sym(f!(prim__Value_new_num), types.ptr, &mut [types.u64]);
+        ctx.with_sym(f!(prim__Value_cons), types.ptr, &mut [types.ptr, types.ptr]);
         ctx.with_sym(f!(prim__Value_nil), types.ptr, &mut []);
         ctx.with_sym(f!(prim__Value_is_true), types.i1, &mut [types.ptr]);
 

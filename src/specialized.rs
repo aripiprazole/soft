@@ -71,6 +71,7 @@ impl ValueRef {
                     _ => Ok(Term::App(box head.specialize()?, args)),
                 }
             }
+            Value::Atom(symbol) if symbol == "nil" => Ok(Term::Nil),
             Value::Atom(symbol) => Ok(Term::GlobalRef(symbol.clone())),
             Value::Nil => Ok(Term::Nil),
         }
@@ -85,7 +86,7 @@ fn specialize_cons(head: &str, tail: Vec<Term>) -> Result<Term, SpecializeError>
             }
             _ => specialize_error!("Invalid set*"),
         },
-        "cons*" => match tail.as_slice() {
+        "cons" => match tail.as_slice() {
             [head, tail] => Ok(Term::Cons(box head.clone(), box tail.clone())),
             _ => specialize_error!("Invalid cons*"),
         },
@@ -135,6 +136,10 @@ fn specialize_cons(head: &str, tail: Vec<Term>) -> Result<Term, SpecializeError>
         "quote" => match tail.as_slice() {
             [value] => Ok(value.clone()),
             _ => specialize_error!("Invalid quote"),
+        },
+        "nil" => match tail.as_slice() {
+            [] => Ok(Term::Nil),
+            _ => specialize_error!("Invalid nil"),
         },
         _ => Ok(Term::App(box Term::GlobalRef(head.to_owned()), tail)),
     }
