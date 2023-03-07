@@ -1,9 +1,5 @@
 use std::fmt::{Debug, Display};
 
-use thin_vec::ThinVec;
-
-use crate::util::{Mode, Spaced};
-
 pub mod primitives;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -12,7 +8,7 @@ pub enum Value {
     Atom(String),
     Closure(ValueRef, ValueRef),
     Function(u8, *mut libc::c_void),
-    Vec(ThinVec<ValueRef>),
+    Vec(*mut ValueRef),
     Nil,
 }
 
@@ -45,7 +41,7 @@ impl Display for ValueRef {
                 Value::Cons(head, tail) => write!(f, "({head} {tail})"),
                 Value::Closure(env, _) => write!(f, "<closure: {env}>"),
                 Value::Function(arity, _) => write!(f, "<function: {arity}>"),
-                Value::Vec(items) => write!(f, "<vec {}>", Spaced(Mode::Interperse, " ", items)),
+                Value::Vec(_) => write!(f, "<vec>"),
             }
         }
     }
@@ -94,7 +90,7 @@ impl ValueRef {
         ValueRef::new(Value::Atom(value))
     }
 
-    pub fn vec(items: ThinVec<ValueRef>) -> ValueRef {
+    pub fn vec(items: *mut ValueRef) -> ValueRef {
         ValueRef::new(Value::Vec(items))
     }
 

@@ -7,6 +7,7 @@ use super::*;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum CompileError {
+    UndefinedEnvRef(String),
     UndefinedLocalRef(String),
     UndefinedGlobalRef(String),
 }
@@ -113,7 +114,24 @@ impl Codegen {
 
                 Ok(closure)
             }
-            EnvRef(_) => todo!(),
+            EnvRef(sym) => {
+                let index = self
+                    .environment
+                    .closure
+                    .get(&sym)
+                    .ok_or_else(|| CompileError::UndefinedEnvRef(sym.clone()))?;
+
+                let env_param = self
+                    .environment
+                    .symbols
+                    .get("#env")
+                    .ok_or_else(|| CompileError::UndefinedLocalRef(sym.clone()))?;
+
+                let index_value = LLVMConstInt(self.types.u64, *index as _, 0);
+                let value = self.call_prim("prim__Value_gep", &mut [env_param.value, index_value]);
+
+                Ok(value)
+            }
             LocalRef(sym) => {
                 let symbol = self
                     .environment
@@ -261,7 +279,7 @@ impl Codegen {
     }
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SymbolRef {
     pub value_type: LLVMTypeRef,
     pub value: LLVMValueRef,
@@ -310,9 +328,9 @@ impl Codegen {
     pub fn enter_scope(&mut self) {
         self.environment = Environment {
             module: self.module,
+            closure: self.environment.closure.clone(),
             symbols: self.environment.symbols.clone(),
             super_environment: box Some(self.environment.clone()),
-            closure: Default::default(),
         };
     }
 

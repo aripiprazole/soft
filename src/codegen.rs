@@ -89,6 +89,7 @@ impl Codegen {
         ctx.with(f!(prim__Value_nil), types.ptr, []);
         ctx.with(f!(prim__Value_is_true), types.i1, [types.ptr]);
         ctx.with(f!(prim__Value_function), types.ptr, [types.u64, types.ptr]);
+        ctx.with(f!(prim__Value_gep), types.ptr, [types.ptr, types.u64]);
         ctx.with(
             f!(prim__Value_new_closure),
             types.ptr,
