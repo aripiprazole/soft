@@ -379,7 +379,6 @@ impl Codegen {
             let value = self.compile_term(term)?;
             let index = LLVMConstInt(self.types.u64, index as u64, 0);
 
-            
             let ptr = LLVMBuildGEP2(
                 self.builder,
                 self.types.ptr,
@@ -388,7 +387,7 @@ impl Codegen {
                 1,
                 cstr!(),
             );
-            
+
             LLVMBuildStore(self.builder, value, ptr);
         }
 
@@ -471,7 +470,7 @@ impl From<LLVMModuleRef> for Environment {
             module,
             closure: HashMap::new(),
             symbols: HashMap::new(),
-            super_environment: box None,
+            super_environment: Box::new(None),
         }
     }
 }
@@ -484,7 +483,7 @@ impl Codegen {
             module: self.module,
             closure: self.environment.closure.clone(),
             symbols: self.environment.symbols.clone(),
-            super_environment: box Some(self.environment.clone()),
+            super_environment: Box::new(Some(self.environment.clone())),
         };
     }
 

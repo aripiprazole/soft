@@ -44,7 +44,6 @@ impl Display for ValueRef {
                 Value::Closure(env, t) => write!(f, "<closure: {env} {t}>"),
                 Value::Function(arity, _) => write!(f, "<function: {arity}>"),
                 Value::Vec(items, size) => {
-
                     let elems = unsafe {
                         std::ptr::slice_from_raw_parts(*items, *size)
                             .as_ref()
@@ -63,7 +62,7 @@ pub struct ValueRef(u64);
 
 impl ValueRef {
     pub fn new(value: Value) -> ValueRef {
-        let ptr = Box::leak(box value);
+        let ptr = Box::leak(Box::new(value));
         ValueRef((ptr as *const Value as u64) | 1)
     }
 
@@ -72,7 +71,7 @@ impl ValueRef {
     }
 
     pub fn to_value(&self) -> &Value {
-        unsafe { std::mem::transmute::<u64, &Value>(self.0 & 0xFFFFFFFFFFFFFFFE)}
+        unsafe { std::mem::transmute::<u64, &Value>(self.0 & 0xFFFFFFFFFFFFFFFE) }
     }
 
     pub fn is_num(&self) -> bool {
@@ -82,7 +81,7 @@ impl ValueRef {
     pub fn num(&self) -> u64 {
         self.0 >> 1
     }
-    
+
     pub fn is_nil(&self) -> bool {
         self.maybe().map_or(false, |value| value == &Value::Nil)
     }
