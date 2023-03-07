@@ -12,6 +12,7 @@ impl Drop for ExecutionEngine {
 }
 
 impl ExecutionEngine {
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn try_new(module: LLVMModuleRef) -> Result<Self, CodegenError> {
         unsafe {
             let mut ptr = std::mem::MaybeUninit::uninit();

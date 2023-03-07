@@ -111,6 +111,7 @@ impl Codegen {
     }
 }
 
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn handle_diagnostic(info: LLVMDiagnosticInfoRef, _context: *mut c_void) {
     unsafe {
         let kind = match LLVMGetDiagInfoSeverity(info) {

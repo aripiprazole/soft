@@ -134,6 +134,7 @@ impl Codegen {
 }
 
 impl Environment {
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn with<const N: usize>(
         &mut self,
         function_ref: FunctionRef,

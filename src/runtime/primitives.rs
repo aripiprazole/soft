@@ -58,6 +58,7 @@ pub mod value {
     }
 
     #[no_mangle]
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub extern "C" fn prim__Value_new_closure(
         env: *mut ValueRef,
         env_len: u64,
@@ -137,7 +138,7 @@ pub mod closure {
         }
 
         match value.to_value() {
-            Value::Closure(env, _) => unsafe { std::mem::transmute::<u64, AnyPtr>(env.0) },
+            Value::Closure(env, _) => env.0 as AnyPtr,
             _ => std::ptr::null_mut(),
         }
     }
@@ -149,7 +150,7 @@ pub mod closure {
         }
 
         match value.to_value() {
-            Value::Closure(_, value) => unsafe { std::mem::transmute::<u64, AnyPtr>(value.0) },
+            Value::Closure(_, value) => value.0 as AnyPtr,
             _ => std::ptr::null_mut(),
         }
     }

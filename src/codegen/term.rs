@@ -74,23 +74,21 @@ impl Codegen {
     }
 
     fn compile_closure(&mut self, env: Vec<(String, Term)>, term: Term) -> Result {
-        unsafe {
-            self.enter_scope();
+        self.enter_scope();
 
-            let closure_environment = env
-                .iter()
-                .enumerate()
-                .map(|(index, (name, _))| (name.clone(), index))
-                .collect();
+        let closure_environment = env
+            .iter()
+            .enumerate()
+            .map(|(index, (name, _))| (name.clone(), index))
+            .collect();
 
-            self.environment.closure = closure_environment;
+        self.environment.closure = closure_environment;
 
-            let closure = self.make_closure(env, term)?;
+        let closure = self.make_closure(env, term)?;
 
-            self.pop_scope();
+        self.pop_scope();
 
-            Ok(closure)
-        }
+        Ok(closure)
     }
 
     fn compile_let(&mut self, entries: Vec<(String, Term)>, term: Term) -> Result {

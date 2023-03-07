@@ -58,7 +58,7 @@ impl Display for ValueRef {
 }
 #[derive(Eq, Clone, Copy)]
 #[repr(C)]
-pub struct ValueRef(u64);
+pub struct ValueRef(pub u64);
 
 impl ValueRef {
     pub fn new(value: Value) -> ValueRef {
