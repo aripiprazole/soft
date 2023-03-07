@@ -1,3 +1,8 @@
+use clap::Parser;
+use soft::cli::Options;
+
 fn main() {
-    soft::repl::run()
+    let options = Options::parse();
+
+    soft::repl::run(&options);
 }
