@@ -1,11 +1,18 @@
 use std::fmt::{Debug, Display};
 
+use thin_vec::ThinVec;
+
+use crate::util::{Mode, Spaced};
+
 pub mod primitives;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Value {
     Cons(ValueRef, ValueRef),
     Atom(String),
+    Closure(ValueRef, ValueRef),
+    Function(u8, *mut libc::c_void),
+    Vec(ThinVec<ValueRef>),
     Nil,
 }
 
@@ -36,6 +43,9 @@ impl Display for ValueRef {
                 Value::Nil => write!(f, "nil"),
                 Value::Atom(value) => write!(f, "{value}"),
                 Value::Cons(head, tail) => write!(f, "({head} {tail})"),
+                Value::Closure(env, _) => write!(f, "<closure: {env}>"),
+                Value::Function(arity, _) => write!(f, "<function: {arity}>"),
+                Value::Vec(items) => write!(f, "<vec {}>", Spaced(Mode::Interperse, " ", items)),
             }
         }
     }
@@ -82,6 +92,18 @@ impl ValueRef {
 
     pub fn atom(value: String) -> ValueRef {
         ValueRef::new(Value::Atom(value))
+    }
+
+    pub fn vec(items: ThinVec<ValueRef>) -> ValueRef {
+        ValueRef::new(Value::Vec(items))
+    }
+
+    pub fn closure(env: ValueRef, func: ValueRef) -> ValueRef {
+        ValueRef::new(Value::Closure(env, func))
+    }
+
+    pub fn function(arity: u8, addr: *mut libc::c_void) -> ValueRef {
+        ValueRef::new(Value::Function(arity, addr))
     }
 
     pub fn new(value: Value) -> ValueRef {
