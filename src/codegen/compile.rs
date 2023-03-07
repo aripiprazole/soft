@@ -2,7 +2,6 @@ use im::HashMap;
 
 use crate::specialized::Term;
 use llvm_sys::LLVMIntPredicate::LLVMIntEQ;
-use std::mem::MaybeUninit;
 
 use super::*;
 
@@ -11,11 +10,29 @@ pub struct SymbolRef {
     pub value_type: LLVMTypeRef,
     pub value: LLVMValueRef,
     pub addr: *mut libc::c_void,
-    pub arity: Option<u32>,
+    pub arity: Option<u16>,
+}
+
+impl SymbolRef {
+    pub unsafe fn new(value_type: LLVMTypeRef, value: LLVMValueRef) -> Self {
+        Self {
+            value_type,
+            value,
+            addr: std::mem::zeroed(),
+            arity: None,
+        }
+    }
+
+    pub fn with_arity(mut self, arity: u16) -> Self {
+        self.arity = Some(arity);
+        self
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum CompileError {}
+pub enum CompileError {
+    UndefinedLocalRef(String),
+}
 
 impl Codegen {
     pub unsafe fn compile_main(&mut self, term: Term) -> Result<(), CompileError> {
@@ -25,7 +42,7 @@ impl Codegen {
         let entry = LLVMAppendBasicBlockInContext(self.context, main, cstr!("entry"));
         LLVMPositionBuilderAtEnd(self.builder, entry);
 
-        self.symbols.current = main;
+        self.current_fn = main;
 
         let value = self.compile_term(term)?;
         LLVMBuildRet(self.builder, value);
@@ -33,18 +50,44 @@ impl Codegen {
         Ok(())
     }
 
-    pub unsafe fn compile_term(&self, term: Term) -> Result<LLVMValueRef, CompileError> {
-        let current = self.symbols.current;
+    pub unsafe fn compile_term(&mut self, term: Term) -> Result<LLVMValueRef, CompileError> {
+        let current = self.current_fn;
 
         match term {
             Term::Lam(_, _, _) => todo!(),
-            Term::Let(_, _) => todo!(),
+            Term::Let(entries, box body) => {
+                self.enter_scope();
+
+                for (name, value) in entries {
+                    let value = self.compile_term(value)?;
+                    let alloca = LLVMBuildAlloca(self.builder, self.types.ptr, cstr!(name));
+                    LLVMBuildStore(self.builder, value, alloca);
+
+                    let symbol_ref = SymbolRef::new(self.types.ptr, alloca);
+                    self.environment.symbols.insert(name, symbol_ref);
+                }
+
+                let body = self.compile_term(body)?;
+
+                self.pop_scope();
+
+                Ok(body)
+            }
             Term::App(_, _) => todo!(),
             Term::Closure(_, _) => todo!(),
             Term::EnvRef(_) => todo!(),
             Term::Set(_, _, _) => todo!(),
             Term::Call(_, _) => todo!(),
-            Term::LocalRef(_) => todo!(),
+            Term::LocalRef(sym) => {
+                let symbol = self
+                    .environment
+                    .symbols
+                    .get(&sym)
+                    .ok_or_else(|| CompileError::UndefinedLocalRef(sym))?;
+
+                let value = LLVMBuildLoad2(self.builder, symbol.value_type, symbol.value, cstr!());
+                Ok(value)
+            }
             Term::GlobalRef(_) => todo!(),
             Term::Num(n) => {
                 let x = LLVMConstInt(self.types.u64, n as u64, 0);
@@ -103,7 +146,7 @@ impl Codegen {
 
     unsafe fn call_prim(&self, name: &str, args: &mut [LLVMValueRef]) -> LLVMValueRef {
         let symbol_ref = self
-            .symbols
+            .environment
             .symbols
             .get(name)
             .expect(&format!("No such primitive: {name}"));
@@ -119,25 +162,40 @@ impl Codegen {
     }
 }
 
-pub struct Context {
+#[derive(Clone)]
+pub struct Environment {
     pub module: LLVMModuleRef,
     pub symbols: HashMap<String, SymbolRef>,
-    pub current: LLVMValueRef,
+    pub super_environment: Box<Option<Environment>>,
 }
 
-impl From<LLVMModuleRef> for Context {
+impl From<LLVMModuleRef> for Environment {
     fn from(module: LLVMModuleRef) -> Self {
         Self {
             module,
             symbols: HashMap::new(),
-            current: unsafe { MaybeUninit::zeroed().assume_init() },
+            super_environment: box None,
         }
     }
 }
 
 type FunctionRef<'a> = (&'a str, *mut libc::c_void);
 
-impl Context {
+impl Codegen {
+    pub fn enter_scope(&mut self) {
+        self.environment = Environment {
+            module: self.module,
+            symbols: self.environment.symbols.clone(),
+            super_environment: box Some(self.environment.clone()),
+        };
+    }
+
+    pub fn pop_scope(&mut self) {
+        self.environment = self.environment.super_environment.clone().unwrap();
+    }
+}
+
+impl Environment {
     pub fn with_sym(&mut self, f: FunctionRef, return_t: LLVMTypeRef, args: &mut [LLVMTypeRef]) {
         let (name, addr) = f;
 
