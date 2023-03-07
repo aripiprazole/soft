@@ -1,6 +1,8 @@
 use std::fmt::{Debug, Display};
 
-use crate::util::{Mode, Spaced};
+use crate::spaced::{Mode, Spaced};
+
+use self::primitives::AnyPtr;
 
 pub mod primitives;
 
@@ -9,8 +11,8 @@ pub enum Value {
     Cons(ValueRef, ValueRef),
     Atom(String),
     Closure(ValueRef, ValueRef),
-    Function(u8, *mut libc::c_void),
-    Vec(*mut ValueRef, usize),
+    Function(u8, primitives::AnyPtr),
+    Vec(usize, *mut ValueRef),
     Nil,
 }
 
@@ -43,15 +45,14 @@ impl Display for ValueRef {
                 Value::Cons(head, tail) => write!(f, "({head} {tail})"),
                 Value::Closure(env, t) => write!(f, "<closure: {env} {t}>"),
                 Value::Function(arity, _) => write!(f, "<function: {arity}>"),
-                Value::Vec(items, size) => {
-
+                Value::Vec(len, items) => {
                     let elems = unsafe {
-                        std::ptr::slice_from_raw_parts(*items, *size)
+                        std::ptr::slice_from_raw_parts(*items, *len)
                             .as_ref()
                             .unwrap()
                     };
 
-                    write!(f, "<vec{}>", Spaced(Mode::Before, " ", &elems))
+                    write!(f, "<vec{}>", Spaced(Mode::Before, " ", elems))
                 }
             }
         }
@@ -59,7 +60,7 @@ impl Display for ValueRef {
 }
 #[derive(Eq, Clone, Copy)]
 #[repr(C)]
-pub struct ValueRef(u64);
+pub struct ValueRef(pub u64);
 
 impl ValueRef {
     pub fn new(value: Value) -> ValueRef {
@@ -72,7 +73,7 @@ impl ValueRef {
     }
 
     pub fn to_value(&self) -> &Value {
-        unsafe { std::mem::transmute::<u64, &Value>(self.0 & 0xFFFFFFFFFFFFFFFE)}
+        unsafe { std::mem::transmute::<u64, &Value>(self.0 & 0xFFFFFFFFFFFFFFFE) }
     }
 
     pub fn is_num(&self) -> bool {
@@ -82,7 +83,7 @@ impl ValueRef {
     pub fn num(&self) -> u64 {
         self.0 >> 1
     }
-    
+
     pub fn is_nil(&self) -> bool {
         self.maybe().map_or(false, |value| value == &Value::Nil)
     }
@@ -114,15 +115,15 @@ impl ValueRef {
         ValueRef::new(Value::Atom(value))
     }
 
-    pub fn vec(size: usize, items: *mut ValueRef) -> ValueRef {
-        ValueRef::new(Value::Vec(items, size))
+    pub fn vec(len: usize, items: *mut ValueRef) -> ValueRef {
+        ValueRef::new(Value::Vec(len, items))
     }
 
     pub fn closure(env: ValueRef, func: ValueRef) -> ValueRef {
         ValueRef::new(Value::Closure(env, func))
     }
 
-    pub fn function(arity: u8, addr: *mut libc::c_void) -> ValueRef {
+    pub fn function(arity: u8, addr: AnyPtr) -> ValueRef {
         ValueRef::new(Value::Function(arity, addr))
     }
 }
