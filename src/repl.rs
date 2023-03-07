@@ -12,10 +12,7 @@ pub fn run() {
 
         let mut rl = DefaultEditor::new().expect("cannot create a repl");
 
-        let mut codegen = Codegen::try_new()
-            .unwrap()
-            .install_error_handling()
-            .install_primitives();
+        let global_environment = Box::leak(Box::new(Default::default()));
 
         loop {
             let readline = rl.readline("> ");
@@ -25,9 +22,16 @@ pub fn run() {
                     rl.add_history_entry(line.as_str())
                         .expect("cannot add to the history");
 
+                    let mut codegen = Codegen::try_new(global_environment)
+                        .unwrap()
+                        .install_error_handling()
+                        .install_primitives()
+                        .install_global_environment();
+
                     let engine = ExecutionEngine::try_new(codegen.module)
                         .unwrap()
-                        .add_primitive_symbols(&codegen.environment);
+                        .install_primitive_symbols(&codegen.environment)
+                        .install_global_environment(&codegen);
 
                     match eval_line(&mut codegen, &engine, line) {
                         Ok(value_ref) => {

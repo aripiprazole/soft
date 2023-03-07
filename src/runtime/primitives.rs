@@ -47,10 +47,46 @@ pub mod value {
         if value.is_num() {
             value.num() != 0
         } else {
-            match value.to_value() {
-                Value::Nil => false,
-                _ => true,
-            }
+            !matches!(value.to_value(), Value::Nil)
         }
+    }
+}
+
+pub mod global {
+    use std::ffi::CStr;
+
+    use crate::codegen::jit::{GlobalEnvironment, GlobalRef};
+
+    use super::ValueRef;
+
+    #[no_mangle]
+    pub unsafe extern "C" fn prim__global_get(
+        global_environment: *mut GlobalEnvironment,
+        name: *const i8,
+    ) -> ValueRef {
+        let global_ref = global_environment
+            .as_ref()
+            .unwrap()
+            .symbols
+            .get(CStr::from_ptr(name).to_string_lossy().as_ref())
+            .expect("prim__global_environment_get: symbol not found");
+
+        global_ref.addr
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn prim__global_set(
+        global_environment: *mut GlobalEnvironment,
+        name: *const i8,
+        value: ValueRef,
+    ) {
+        let name = CStr::from_ptr(name).to_string_lossy().into_owned();
+        let global_ref = GlobalRef::new(value);
+
+        global_environment
+            .as_mut()
+            .unwrap()
+            .symbols
+            .insert(name, global_ref);
     }
 }

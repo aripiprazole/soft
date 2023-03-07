@@ -8,6 +8,7 @@ use super::*;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum CompileError {
     UndefinedLocalRef(String),
+    UndefinedGlobalRef(String),
 }
 
 impl Codegen {
@@ -56,7 +57,6 @@ impl Codegen {
             App(_, _) => todo!(),
             Closure(_, _) => todo!(),
             EnvRef(_) => todo!(),
-            Set(_, _, _) => todo!(),
             Call(_, _) => todo!(),
             LocalRef(sym) => {
                 let symbol = self
@@ -68,7 +68,21 @@ impl Codegen {
                 let value = LLVMBuildLoad2(self.builder, symbol.value_type, symbol.value, cstr!());
                 Ok(value)
             }
-            GlobalRef(_) => todo!(),
+            GlobalRef(sym) => {
+                let sym_lit = LLVMBuildGlobalStringPtr(self.builder, cstr!(sym), cstr!());
+
+                let value = self.call_prim("prim__global_get", &mut [self.global_sym, sym_lit]);
+
+                Ok(value)
+            }
+            Set(name, _, box value_term) => {
+                let sym = LLVMBuildGlobalStringPtr(self.builder, cstr!(name), cstr!());
+                let value = self.compile_term(value_term)?;
+
+                self.call_prim("prim__global_set", &mut [self.global_sym, sym, value]);
+
+                self.compile_term(Term::Nil)
+            }
             Num(n) => {
                 let x = LLVMConstInt(self.types.u64, n as u64, 0);
                 Ok(self.call_prim("prim__Value_new_num", &mut [x]))
@@ -208,18 +222,25 @@ impl Codegen {
 }
 
 impl Environment {
-    pub fn with_sym(&mut self, f: FunctionRef, return_t: LLVMTypeRef, args: &mut [LLVMTypeRef]) {
-        let (name, addr) = f;
+    pub fn with<const N: usize>(
+        &mut self,
+        function_ref: FunctionRef,
+        return_type: LLVMTypeRef,
+        mut args: [LLVMTypeRef; N],
+    ) {
+        let (name, addr) = function_ref;
 
-        let func_t = unsafe { LLVMFunctionType(return_t, args.as_mut_ptr(), args.len() as _, 0) };
-        let func_v = unsafe { LLVMAddFunction(self.module, cstr!(name), func_t) };
-        let symbol_ref = SymbolRef {
-            value_type: func_t,
-            value: func_v,
-            addr,
-            arity: Some(args.len() as _),
-        };
+        unsafe {
+            let value_type = LLVMFunctionType(return_type, args.as_mut_ptr(), args.len() as _, 0);
+            let value = LLVMAddFunction(self.module, cstr!(name), value_type);
+            let symbol_ref = SymbolRef {
+                value_type,
+                value,
+                addr,
+                arity: Some(args.len() as _),
+            };
 
-        self.symbols.insert(name.to_string(), symbol_ref);
+            self.symbols.insert(name.to_string(), symbol_ref);
+        }
     }
 }
