@@ -34,6 +34,7 @@ pub struct Codegen {
     pub current_fn: LLVMValueRef,
     pub environment: compile::Environment,
     pub global_environment: *mut GlobalEnvironment,
+    pub global_sym: LLVMValueRef,
 }
 
 impl Drop for Codegen {
@@ -47,22 +48,24 @@ impl Drop for Codegen {
 }
 
 impl Codegen {
-    pub unsafe fn try_new() -> Result<Codegen, CodegenError> {
+    pub unsafe fn try_new(
+        global_environment: *mut GlobalEnvironment,
+    ) -> Result<Codegen, CodegenError> {
         let context = LLVMContextCreate();
         let module = LLVMModuleCreateWithNameInContext(cstr!("soft"), context);
         let builder = LLVMCreateBuilderInContext(context);
         let types = types::Types::from(context);
         let environment = compile::Environment::from(module);
-        let current_fn = std::mem::zeroed();
 
         Ok(Codegen {
             context,
             module,
             builder,
             types,
-            current_fn,
             environment,
-            global_environment: Box::leak(Box::new(Default::default())),
+            global_environment,
+            current_fn: std::mem::zeroed(),
+            global_sym: std::mem::zeroed(),
         })
     }
 
@@ -75,15 +78,25 @@ impl Codegen {
     }
 
     pub unsafe fn install_primitives(mut self) -> Self {
+        use crate::runtime::primitives::global::*;
         use crate::runtime::primitives::value::*;
 
         let types = &self.types;
         let ctx = &mut self.environment;
 
-        ctx.with_sym(f!(prim__Value_new_num), types.ptr, &mut [types.u64]);
-        ctx.with_sym(f!(prim__Value_cons), types.ptr, &mut [types.ptr, types.ptr]);
-        ctx.with_sym(f!(prim__Value_nil), types.ptr, &mut []);
-        ctx.with_sym(f!(prim__Value_is_true), types.i1, &mut [types.ptr]);
+        ctx.with(f!(prim__Value_new_num), types.ptr, [types.u64]);
+        ctx.with(f!(prim__Value_cons), types.ptr, [types.ptr, types.ptr]);
+        ctx.with(f!(prim__Value_nil), types.ptr, []);
+        ctx.with(f!(prim__Value_is_true), types.i1, [types.ptr]);
+
+        ctx.with(f!(prim__global_get), types.ptr, [types.ptr, types.ptr]);
+        ctx.with(f!(prim__global_set), types.ptr, [types.ptr; 3]);
+
+        self
+    }
+
+    pub unsafe fn install_global_environment(mut self) -> Self {
+        self.global_sym = LLVMAddGlobal(self.module, self.types.ptr, cstr!("global_environment"));
 
         self
     }
@@ -137,10 +150,13 @@ mod tests {
         unsafe {
             Codegen::install_execution_targets();
 
-            let mut codegen = Codegen::try_new()
+            let global_environment = Box::leak(Box::new(Default::default()));
+
+            let mut codegen = Codegen::try_new(global_environment)
                 .unwrap()
                 .install_error_handling()
-                .install_primitives();
+                .install_primitives()
+                .install_global_environment();
 
             codegen.compile_main(Term::Num(42)).unwrap();
             codegen.dump_module();
@@ -154,7 +170,8 @@ mod tests {
 
             let engine = execution::ExecutionEngine::try_new(codegen.module)
                 .unwrap()
-                .add_primitive_symbols(&codegen.environment);
+                .install_primitive_symbols(&codegen.environment)
+                .install_global_environment(&codegen);
 
             let f: extern "C" fn() -> ValueRef =
                 std::mem::transmute(engine.get_function_address("main"));

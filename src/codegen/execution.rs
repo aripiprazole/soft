@@ -26,10 +26,19 @@ impl ExecutionEngine {
         Ok(ExecutionEngine(ptr.assume_init()))
     }
 
-    pub unsafe fn add_primitive_symbols(self, context: &compile::Environment) -> Self {
+    pub unsafe fn install_primitive_symbols(self, context: &compile::Environment) -> Self {
         for symbol_ref in context.symbols.values().into_iter() {
             LLVMAddGlobalMapping(self.0, symbol_ref.value, symbol_ref.addr);
         }
+
+        self
+    }
+
+    pub unsafe fn install_global_environment(self, codegen: &Codegen) -> Self {
+        let global_environment = codegen.global_environment as *mut libc::c_void;
+        let global_sym = LLVMGetNamedGlobal(codegen.module, cstr!("global_environment"));
+
+        LLVMAddGlobalMapping(self.0, global_sym, global_environment);
 
         self
     }
