@@ -12,6 +12,8 @@ pub enum CompileError {
 
 impl Codegen {
     pub unsafe fn compile_main(&mut self, term: Term) -> Result<(), CompileError> {
+        self.delete_main_if_exists();
+
         let main_t = LLVMFunctionType(self.types.ptr, [].as_mut_ptr(), 0, 0);
         let main = LLVMAddFunction(self.module, cstr!("main"), main_t);
 
@@ -112,6 +114,14 @@ impl Codegen {
 
                 Ok(phi)
             }
+        }
+    }
+
+    unsafe fn delete_main_if_exists(&self) {
+        let main = LLVMGetNamedFunction(self.module, cstr!("main"));
+
+        if !main.is_null() {
+            LLVMDeleteFunction(main);
         }
     }
 
