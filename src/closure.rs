@@ -1,4 +1,4 @@
-use im::{hashset, HashSet};
+use im::HashSet;
 
 use crate::specialized::{Lifted, Term};
 

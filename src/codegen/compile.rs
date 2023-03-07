@@ -51,6 +51,12 @@ impl Codegen {
                 Ok(self.call_prim("prim__Value_new_num", &mut [x]))
             }
             Term::Quote(_) => todo!(),
+            Term::Cons(box head, box tail) => {
+                let head = self.compile_term(head)?;
+                let tail = self.compile_term(tail)?;
+
+                Ok(self.call_prim("prim__Value_cons", &mut [head, tail]))
+            }
             Term::Nil => Ok(self.call_prim("prim__Value_nil", &mut [])),
             Term::If(box cond_term, box then_term, box else_term) => {
                 let next_br = LLVMAppendBasicBlockInContext(self.context, current, cstr!());
@@ -85,7 +91,6 @@ impl Codegen {
 
                 Ok(phi)
             }
-            Term::Cons(_, _) => todo!(),
         }
     }
 
