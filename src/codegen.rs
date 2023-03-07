@@ -7,7 +7,10 @@ use llvm_sys::{
     LLVMDiagnosticSeverity::{LLVMDSError, LLVMDSNote, LLVMDSRemark, LLVMDSWarning},
 };
 
-use crate::macros::{cstr, llvm_wrapper};
+use crate::{
+    cli::Options,
+    macros::{cstr, llvm_wrapper},
+};
 
 pub use llvm_sys::{core::*, execution_engine::*, prelude::*};
 
@@ -30,6 +33,7 @@ pub struct Codegen {
     pub environment: compile::Environment,
     pub global_environment: *mut GlobalEnvironment,
     pub global_sym: LLVMValueRef,
+    pub options: Box<crate::cli::Options>,
 }
 
 impl Drop for Codegen {
@@ -60,14 +64,16 @@ impl Codegen {
                 global_environment,
                 current_fn: std::ptr::null_mut(),
                 global_sym: std::ptr::null_mut(),
+                options: Box::default(),
             }
         }
     }
 
-    pub fn install_error_handling(self) -> Self {
+    pub fn install_error_handling(mut self) -> Self {
         unsafe {
             // enable diagnostic messages
-            let diagnostic_context = LLVMContextGetDiagnosticContext(self.context);
+            let diagnostic_context = self.options.as_mut() as *mut _ as *mut c_void;
+            let handle_diagnostic = handle_diagnostic as extern "C" fn(_, *mut c_void);
             let handle_fn: Option<extern "C" fn(_, _)> = Some(handle_diagnostic);
             LLVMContextSetDiagnosticHandler(self.context, handle_fn, diagnostic_context);
 
@@ -112,8 +118,14 @@ impl Codegen {
 }
 
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub extern "C" fn handle_diagnostic(info: LLVMDiagnosticInfoRef, _context: *mut c_void) {
+pub extern "C" fn handle_diagnostic(info: LLVMDiagnosticInfoRef, context: *mut libc::c_void) {
+    let options = context as *mut Options;
+
     unsafe {
+        if !(*options).debug {
+            return;
+        }
+
         let kind = match LLVMGetDiagInfoSeverity(info) {
             LLVMDSError => "error",
             LLVMDSWarning => "warning",
