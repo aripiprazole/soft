@@ -67,7 +67,7 @@ impl Codegen {
             module: self.module,
             closure: self.environment.closure.clone(),
             symbols: self.environment.symbols.clone(),
-            super_environment: box Some(self.environment.clone()),
+            super_environment: Box::new(Some(self.environment.clone())),
         };
     }
 
@@ -119,7 +119,7 @@ impl From<LLVMModuleRef> for Environment {
             module,
             closure: HashMap::new(),
             symbols: HashMap::new(),
-            super_environment: box None,
+            super_environment: Box::new(None),
         }
     }
 }
