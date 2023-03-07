@@ -5,30 +5,6 @@ use llvm_sys::LLVMIntPredicate::LLVMIntEQ;
 
 use super::*;
 
-#[derive(PartialEq, Eq, Clone)]
-pub struct SymbolRef {
-    pub value_type: LLVMTypeRef,
-    pub value: LLVMValueRef,
-    pub addr: *mut libc::c_void,
-    pub arity: Option<u16>,
-}
-
-impl SymbolRef {
-    pub unsafe fn new(value_type: LLVMTypeRef, value: LLVMValueRef) -> Self {
-        Self {
-            value_type,
-            value,
-            addr: std::mem::zeroed(),
-            arity: None,
-        }
-    }
-
-    pub fn with_arity(mut self, arity: u16) -> Self {
-        self.arity = Some(arity);
-        self
-    }
-}
-
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum CompileError {
     UndefinedLocalRef(String),
@@ -51,11 +27,13 @@ impl Codegen {
     }
 
     pub unsafe fn compile_term(&mut self, term: Term) -> Result<LLVMValueRef, CompileError> {
+        use Term::*;
+
         let current = self.current_fn;
 
         match term {
-            Term::Lam(_, _, _) => todo!(),
-            Term::Let(entries, box body) => {
+            Lam(_, _, _) => todo!(),
+            Let(entries, box body) => {
                 self.enter_scope();
 
                 for (name, value) in entries {
@@ -73,12 +51,12 @@ impl Codegen {
 
                 Ok(body)
             }
-            Term::App(_, _) => todo!(),
-            Term::Closure(_, _) => todo!(),
-            Term::EnvRef(_) => todo!(),
-            Term::Set(_, _, _) => todo!(),
-            Term::Call(_, _) => todo!(),
-            Term::LocalRef(sym) => {
+            App(_, _) => todo!(),
+            Closure(_, _) => todo!(),
+            EnvRef(_) => todo!(),
+            Set(_, _, _) => todo!(),
+            Call(_, _) => todo!(),
+            LocalRef(sym) => {
                 let symbol = self
                     .environment
                     .symbols
@@ -88,20 +66,20 @@ impl Codegen {
                 let value = LLVMBuildLoad2(self.builder, symbol.value_type, symbol.value, cstr!());
                 Ok(value)
             }
-            Term::GlobalRef(_) => todo!(),
-            Term::Num(n) => {
+            GlobalRef(_) => todo!(),
+            Num(n) => {
                 let x = LLVMConstInt(self.types.u64, n as u64, 0);
                 Ok(self.call_prim("prim__Value_new_num", &mut [x]))
             }
-            Term::Quote(_) => todo!(),
-            Term::Cons(box head, box tail) => {
+            Quote(_) => todo!(),
+            Cons(box head, box tail) => {
                 let head = self.compile_term(head)?;
                 let tail = self.compile_term(tail)?;
 
                 Ok(self.call_prim("prim__Value_cons", &mut [head, tail]))
             }
-            Term::Nil => Ok(self.call_prim("prim__Value_nil", &mut [])),
-            Term::If(box cond_term, box then_term, box else_term) => {
+            Nil => Ok(self.call_prim("prim__Value_nil", &mut [])),
+            If(box cond_term, box then_term, box else_term) => {
                 let next_br = LLVMAppendBasicBlockInContext(self.context, current, cstr!());
                 let then_br = LLVMAppendBasicBlockInContext(self.context, current, cstr!());
                 let else_br = LLVMAppendBasicBlockInContext(self.context, current, cstr!());
@@ -162,6 +140,30 @@ impl Codegen {
     }
 }
 
+#[derive(PartialEq, Eq, Clone)]
+pub struct SymbolRef {
+    pub value_type: LLVMTypeRef,
+    pub value: LLVMValueRef,
+    pub addr: *mut libc::c_void,
+    pub arity: Option<u16>,
+}
+
+impl SymbolRef {
+    pub unsafe fn new(value_type: LLVMTypeRef, value: LLVMValueRef) -> Self {
+        Self {
+            value_type,
+            value,
+            addr: std::mem::zeroed(),
+            arity: None,
+        }
+    }
+
+    pub fn with_arity(mut self, arity: u16) -> Self {
+        self.arity = Some(arity);
+        self
+    }
+}
+
 #[derive(Clone)]
 pub struct Environment {
     pub module: LLVMModuleRef,
@@ -200,10 +202,10 @@ impl Environment {
         let (name, addr) = f;
 
         let func_t = unsafe { LLVMFunctionType(return_t, args.as_mut_ptr(), args.len() as _, 0) };
-        let func = unsafe { LLVMAddFunction(self.module, cstr!(name), func_t) };
+        let func_v = unsafe { LLVMAddFunction(self.module, cstr!(name), func_t) };
         let symbol_ref = SymbolRef {
             value_type: func_t,
-            value: func,
+            value: func_v,
             addr,
             arity: Some(args.len() as _),
         };
