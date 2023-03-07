@@ -7,60 +7,57 @@ use crate::{
 };
 
 pub fn run() {
-    unsafe {
-        Codegen::install_execution_targets();
+    Codegen::install_execution_targets();
 
-        let mut rl = DefaultEditor::new().expect("cannot create a repl");
+    let mut rl = DefaultEditor::new().expect("cannot create a repl");
 
-        let global_environment = Box::leak(Box::new(Default::default()));
+    let global_environment = Box::leak(Box::new(Default::default()));
 
-        loop {
-            let readline = rl.readline("> ");
+    loop {
+        let readline = rl.readline("> ");
 
-            match readline {
-                Ok(line) => {
-                    rl.add_history_entry(line.as_str())
-                        .expect("cannot add to the history");
+        match readline {
+            Ok(line) => {
+                rl.add_history_entry(line.as_str())
+                    .expect("cannot add to the history");
 
-                    let mut codegen = Codegen::try_new(global_environment)
-                        .unwrap()
-                        .install_error_handling()
-                        .install_primitives()
-                        .install_global_environment();
+                let mut codegen = Codegen::new(global_environment)
+                    .install_error_handling()
+                    .install_primitives()
+                    .install_global_environment();
 
-                    let engine = ExecutionEngine::try_new(codegen.module)
-                        .unwrap()
-                        .install_primitive_symbols(&codegen.environment)
-                        .install_global_environment(&codegen);
+                let engine = ExecutionEngine::try_new(codegen.module)
+                    .unwrap()
+                    .install_primitive_symbols(&codegen.environment)
+                    .install_global_environment(&codegen);
 
-                    match eval_line(&mut codegen, &engine, line) {
-                        Ok(value_ref) => {
-                            println!(": {value_ref}")
-                        }
-                        Err(err) => {
-                            println!("[error] Uncaught error when evaluating:");
-                            println!("~ {err}")
-                        }
+                match eval_line(&mut codegen, &engine, line) {
+                    Ok(value_ref) => {
+                        println!(": {value_ref}")
+                    }
+                    Err(err) => {
+                        println!("[error] Uncaught error when evaluating:");
+                        println!("~ {err}")
                     }
                 }
-                Err(ReadlineError::Interrupted) => {
-                    println!("[exit] Bye bye... 👋");
-                    break;
-                }
-                Err(ReadlineError::Eof) => {
-                    println!("[exit] CTRL-D");
-                    break;
-                }
-                Err(err) => {
-                    println!("[error] Uncaught I/O error: {err:?}");
-                    break;
-                }
+            }
+            Err(ReadlineError::Interrupted) => {
+                println!("[exit] Bye bye... 👋");
+                break;
+            }
+            Err(ReadlineError::Eof) => {
+                println!("[exit] CTRL-D");
+                break;
+            }
+            Err(err) => {
+                println!("[error] Uncaught I/O error: {err:?}");
+                break;
             }
         }
     }
 }
 
-unsafe fn eval_line(
+fn eval_line(
     codegen: &mut Codegen,
     engine: &ExecutionEngine,
     line: String,
@@ -91,7 +88,8 @@ unsafe fn eval_line(
         panic!("Module verification failed")
     });
 
-    let f: extern "C" fn() -> ValueRef = std::mem::transmute(engine.get_function_address("main"));
+    let f: extern "C" fn() -> ValueRef =
+        unsafe { std::mem::transmute(engine.get_function_address("main")) };
 
     Ok(f())
 }

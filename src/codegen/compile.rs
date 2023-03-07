@@ -15,52 +15,60 @@ pub enum CompileError {
 }
 
 impl Codegen {
-    pub unsafe fn compile_main(&mut self, term: Term) -> Result<()> {
-        self.delete_main_if_exists();
+    pub fn compile_main(&mut self, term: Term) -> Result<()> {
+        unsafe {
+            self.delete_main_if_exists();
 
-        let main_t = LLVMFunctionType(self.types.ptr, [].as_mut_ptr(), 0, 0);
-        let main = LLVMAddFunction(self.module, cstr!("main"), main_t);
+            let main_t = LLVMFunctionType(self.types.ptr, [].as_mut_ptr(), 0, 0);
+            let main = LLVMAddFunction(self.module, cstr!("main"), main_t);
 
-        let entry = LLVMAppendBasicBlockInContext(self.context, main, cstr!("entry"));
-        LLVMPositionBuilderAtEnd(self.builder, entry);
+            let entry = LLVMAppendBasicBlockInContext(self.context, main, cstr!("entry"));
+            LLVMPositionBuilderAtEnd(self.builder, entry);
 
-        self.current_fn = main;
+            self.current_fn = main;
 
-        let value = self.compile_term(term)?;
-        LLVMBuildRet(self.builder, value);
+            let value = self.compile_term(term)?;
+            LLVMBuildRet(self.builder, value);
 
-        Ok(())
+            Ok(())
+        }
     }
 
-    pub unsafe fn make_if(&self, cond: LLVMValueRef) -> LLVMValueRef {
-        let is_true = self.make_call("prim__Value_is_true", &mut [cond]);
-        let true_v = LLVMConstInt(self.types.i1, 1, 0);
+    pub fn make_if(&self, cond: LLVMValueRef) -> LLVMValueRef {
+        unsafe {
+            let is_true = self.make_call("prim__Value_is_true", &mut [cond]);
+            let true_v = LLVMConstInt(self.types.i1, 1, 0);
 
-        LLVMBuildICmp(self.builder, LLVMIntEQ, is_true, true_v, cstr!())
+            LLVMBuildICmp(self.builder, LLVMIntEQ, is_true, true_v, cstr!())
+        }
     }
 
-    pub unsafe fn make_call(&self, name: &str, args: &mut [LLVMValueRef]) -> LLVMValueRef {
-        let symbol_ref = self
-            .environment
-            .symbols
-            .get(name)
-            .expect(&format!("No such primitive: {name}"));
+    pub fn make_call(&self, name: &str, args: &mut [LLVMValueRef]) -> LLVMValueRef {
+        unsafe {
+            let symbol_ref = self
+                .environment
+                .symbols
+                .get(name)
+                .expect(&format!("No such primitive: {name}"));
 
-        LLVMBuildCall2(
-            self.builder,
-            symbol_ref.value_type,
-            symbol_ref.value,
-            args.as_mut_ptr(),
-            args.len() as u32,
-            cstr!(),
-        )
+            LLVMBuildCall2(
+                self.builder,
+                symbol_ref.value_type,
+                symbol_ref.value,
+                args.as_mut_ptr(),
+                args.len() as u32,
+                cstr!(),
+            )
+        }
     }
 
     unsafe fn delete_main_if_exists(&self) {
-        let main = LLVMGetNamedFunction(self.module, cstr!("main"));
+        unsafe {
+            let main = LLVMGetNamedFunction(self.module, cstr!("main"));
 
-        if !main.is_null() {
-            LLVMDeleteFunction(main);
+            if !main.is_null() {
+                LLVMDeleteFunction(main);
+            }
         }
     }
 }
@@ -74,11 +82,11 @@ pub struct SymbolRef {
 }
 
 impl SymbolRef {
-    pub unsafe fn new(value_type: LLVMTypeRef, value: LLVMValueRef) -> Self {
+    pub fn new(value_type: LLVMTypeRef, value: LLVMValueRef) -> Self {
         Self {
             value_type,
             value,
-            addr: std::mem::zeroed(),
+            addr: std::ptr::null_mut(),
             arity: None,
         }
     }

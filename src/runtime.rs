@@ -43,15 +43,14 @@ impl Display for ValueRef {
                 Value::Cons(head, tail) => write!(f, "({head} {tail})"),
                 Value::Closure(env, t) => write!(f, "<closure: {env} {t}>"),
                 Value::Function(arity, _) => write!(f, "<function: {arity}>"),
-                Value::Vec(items, size) => {
-
+                Value::Vec(items, len) => {
                     let elems = unsafe {
-                        std::ptr::slice_from_raw_parts(*items, *size)
+                        std::ptr::slice_from_raw_parts(*items, *len)
                             .as_ref()
                             .unwrap()
                     };
 
-                    write!(f, "<vec{}>", Spaced(Mode::Before, " ", &elems))
+                    write!(f, "<vec{}>", Spaced(Mode::Before, " ", elems))
                 }
             }
         }
@@ -72,7 +71,7 @@ impl ValueRef {
     }
 
     pub fn to_value(&self) -> &Value {
-        unsafe { std::mem::transmute::<u64, &Value>(self.0 & 0xFFFFFFFFFFFFFFFE)}
+        unsafe { std::mem::transmute::<u64, &Value>(self.0 & 0xFFFFFFFFFFFFFFFE) }
     }
 
     pub fn is_num(&self) -> bool {
@@ -82,7 +81,7 @@ impl ValueRef {
     pub fn num(&self) -> u64 {
         self.0 >> 1
     }
-    
+
     pub fn is_nil(&self) -> bool {
         self.maybe().map_or(false, |value| value == &Value::Nil)
     }
