@@ -1,5 +1,5 @@
 #![feature(box_syntax, box_patterns)]
-
+#![feature(mem_copy_fn)]
 pub mod closure;
 pub mod codegen;
 pub mod repl;

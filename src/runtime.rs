@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Display};
 
+use crate::util::{Mode, Spaced};
+
 pub mod primitives;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -8,7 +10,7 @@ pub enum Value {
     Atom(String),
     Closure(ValueRef, ValueRef),
     Function(u8, *mut libc::c_void),
-    Vec(*mut ValueRef),
+    Vec(*mut ValueRef, usize),
     Nil,
 }
 
@@ -39,9 +41,18 @@ impl Display for ValueRef {
                 Value::Nil => write!(f, "nil"),
                 Value::Atom(value) => write!(f, "{value}"),
                 Value::Cons(head, tail) => write!(f, "({head} {tail})"),
-                Value::Closure(env, _) => write!(f, "<closure: {env}>"),
+                Value::Closure(env, t) => write!(f, "<closure: {env} {t}>"),
                 Value::Function(arity, _) => write!(f, "<function: {arity}>"),
-                Value::Vec(_) => write!(f, "<vec>"),
+                Value::Vec(items, size) => {
+
+                    let elems = unsafe {
+                        std::ptr::slice_from_raw_parts(*items, *size)
+                            .as_ref()
+                            .unwrap()
+                    };
+
+                    write!(f, "<vec{}>", Spaced(Mode::Before, " ", &elems))
+                }
             }
         }
     }
@@ -51,16 +62,29 @@ impl Display for ValueRef {
 pub struct ValueRef(u64);
 
 impl ValueRef {
-    pub fn is_num(&self) -> bool {
-        self.0 & 1 == 1
+    pub fn new(value: Value) -> ValueRef {
+        let ptr = Box::leak(box value);
+        ValueRef((ptr as *const Value as u64) | 1)
     }
 
-    pub fn is_nil(&self) -> bool {
-        self.maybe().map_or(false, |value| value == &Value::Nil)
+    pub fn new_num(value: u64) -> ValueRef {
+        ValueRef(value << 1)
+    }
+
+    pub fn to_value(&self) -> &Value {
+        unsafe { std::mem::transmute::<u64, &Value>(self.0 & 0xFFFFFFFFFFFFFFFE)}
+    }
+
+    pub fn is_num(&self) -> bool {
+        self.0 & 1 == 0
     }
 
     pub fn num(&self) -> u64 {
         self.0 >> 1
+    }
+    
+    pub fn is_nil(&self) -> bool {
+        self.maybe().map_or(false, |value| value == &Value::Nil)
     }
 
     pub fn maybe(&self) -> Option<&Value> {
@@ -90,8 +114,8 @@ impl ValueRef {
         ValueRef::new(Value::Atom(value))
     }
 
-    pub fn vec(items: *mut ValueRef) -> ValueRef {
-        ValueRef::new(Value::Vec(items))
+    pub fn vec(size: usize, items: *mut ValueRef) -> ValueRef {
+        ValueRef::new(Value::Vec(items, size))
     }
 
     pub fn closure(env: ValueRef, func: ValueRef) -> ValueRef {
@@ -100,19 +124,6 @@ impl ValueRef {
 
     pub fn function(arity: u8, addr: *mut libc::c_void) -> ValueRef {
         ValueRef::new(Value::Function(arity, addr))
-    }
-
-    pub fn new(value: Value) -> ValueRef {
-        let ptr = Box::leak(box value);
-        ValueRef(ptr as *const Value as u64)
-    }
-
-    pub fn new_num(value: u64) -> ValueRef {
-        ValueRef(value << 1 | 1)
-    }
-
-    pub fn to_value(&self) -> &Value {
-        unsafe { std::mem::transmute::<u64, &Value>(self.0) }
     }
 }
 

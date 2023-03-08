@@ -1,4 +1,5 @@
 pub use crate::runtime::{Value, ValueRef};
+use std::alloc::{alloc, Layout};
 
 pub mod value {
     pub use super::*;
@@ -57,10 +58,11 @@ pub mod value {
         env_len: u64,
         body: ValueRef,
     ) -> ValueRef {
-        let slice = std::slice::from_raw_parts_mut(env, env_len as _);
-        let leaked_env = Box::leak(box slice.as_mut_ptr().clone());
-        let env = ValueRef::vec(*leaked_env);
-
+        let layout = Layout::from_size_align(std::mem::size_of::<ValueRef>() * env_len as usize, 8)
+            .expect("Invalid layout");
+        let slice = alloc(layout) as *mut ValueRef;
+        *slice = std::mem::copy(env.as_ref().unwrap());
+        let env = ValueRef::vec(env_len as usize, slice);
         ValueRef::closure(env, body)
     }
 
@@ -79,8 +81,70 @@ pub mod value {
         }
 
         match ptr.to_value() {
-            Value::Vec(ref items) => items.add(index as _).read(),
-            _ => panic!("prim__Value_gep: expected pointer, got {:?}", ptr),
+            Value::Vec(ref items, _) => items.add(index as _).read(),
+            _ => panic!("prim__Value_gep: expected pointer, got {ptr:?}"),
+        }
+    }
+}
+
+pub mod fun {
+    use super::{Value, ValueRef};
+
+    #[no_mangle]
+    pub unsafe extern "C" fn prim__fn_addr(value: ValueRef) -> *mut libc::c_void {
+        if value.is_num() {
+            panic!("prim__fn_addr: expected pointer, got number");
+        }
+
+        match value.to_value() {
+            Value::Function(_, ptr) => *ptr,
+            _ => panic!("prim__fn_addr: expected pointer, got {value:?}"),
+        }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn prim__check_arity(value: ValueRef, args: u64) -> *mut libc::c_void {
+        if value.is_num() {
+            panic!("prim__fn_check_arity: expected pointer, got number");
+        }
+
+        match value.to_value() {
+            Value::Function(arity, ptr) => {
+                if (*arity as u64) != args {
+                    panic!("prim__fn_check_arity: expected arity {value}, got {args}");
+                }
+
+                *ptr
+            }
+            _ => std::ptr::null_mut(),
+        }
+    }
+}
+
+pub mod closure {
+    use super::{Value, ValueRef};
+
+    #[no_mangle]
+    pub unsafe extern "C" fn prim__closure_get_env(value: ValueRef) -> *mut libc::c_void {
+        if value.is_num() {
+            panic!("prim__closure_get_env: expected pointer, got number");
+        }
+
+        match value.to_value() {
+            Value::Closure(env, _) => std::mem::transmute::<u64, *mut libc::c_void>(env.0),
+            _ => std::ptr::null_mut(),
+        }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn prim__closure_get_fn(value: ValueRef) -> *mut libc::c_void {
+        if value.is_num() {
+            panic!("prim__closure_get_fn: expected pointer, got number");
+        }
+
+        match value.to_value() {
+            Value::Closure(_, value) => std::mem::transmute::<u64, *mut libc::c_void>(value.0),
+            _ => std::ptr::null_mut(),
         }
     }
 }
@@ -93,16 +157,22 @@ pub mod global {
     use super::ValueRef;
 
     #[no_mangle]
+    pub unsafe extern "C" fn prim__is_null(value: *mut libc::c_void) -> bool {
+        value.is_null()
+    }
+
+    #[no_mangle]
     pub unsafe extern "C" fn prim__global_get(
         global_environment: *mut GlobalEnvironment,
         name: *const i8,
     ) -> ValueRef {
+        let rust_name = CStr::from_ptr(name).to_string_lossy();
         let global_ref = global_environment
             .as_ref()
             .unwrap()
             .symbols
-            .get(CStr::from_ptr(name).to_string_lossy().as_ref())
-            .expect("prim__global_environment_get: symbol not found");
+            .get(rust_name.as_ref())
+            .expect(&format!("prim__global_get: symbol {rust_name} not found"));
 
         global_ref.addr
     }
@@ -121,5 +191,10 @@ pub mod global {
             .unwrap()
             .symbols
             .insert(name, global_ref);
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn prim__panic() -> ValueRef {
+        panic!("prim__panic: panic!");
     }
 }
