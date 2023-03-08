@@ -18,6 +18,7 @@ use self::jit::GlobalEnvironment;
 
 pub mod compile;
 pub mod execution;
+pub mod helpers;
 pub mod jit;
 pub mod term;
 pub mod types;
