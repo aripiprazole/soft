@@ -16,9 +16,9 @@ pub use llvm_sys::{core::*, execution_engine::*, prelude::*};
 
 use self::jit::GlobalEnvironment;
 
-pub mod builder;
 pub mod compile;
 pub mod execution;
+pub mod helpers;
 pub mod jit;
 pub mod term;
 pub mod types;

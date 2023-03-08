@@ -1,12 +1,12 @@
 use super::{
-    builder::{function_type, pointer_type, IRContext, IRModule},
     compile::Result,
+    helpers::{function_type, pointer_type, IRContext, IRModule},
     *,
 };
 use crate::{
     codegen::{
-        builder::IRBuilder,
         compile::{CompileError, SymbolRef},
+        helpers::IRBuilder,
     },
     specialized::Term,
 };

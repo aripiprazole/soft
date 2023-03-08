@@ -1,6 +1,6 @@
-use llvm_sys::LLVMIntPredicate;
+use llvm_sys::{core::*, prelude::*, LLVMIntPredicate};
 
-use super::*;
+use crate::macros::cstr;
 
 pub trait IRBuilder {
     fn position_at_end(&self, block: LLVMBasicBlockRef);
@@ -64,16 +64,6 @@ impl IRBuilder for LLVMBuilderRef {
 
     fn build_ret(&self, value: LLVMValueRef) -> LLVMValueRef {
         unsafe { LLVMBuildRet(*self, value) }
-    }
-
-    fn build_icmp(
-        &self,
-        pred: LLVMIntPredicate,
-        lhs: LLVMValueRef,
-        rhs: LLVMValueRef,
-        name: &str,
-    ) -> LLVMValueRef {
-        unsafe { LLVMBuildICmp(*self, pred, lhs, rhs, cstr!(name)) }
     }
 
     fn build_load(&self, kind: LLVMTypeRef, value: LLVMValueRef, name: &str) -> LLVMValueRef {
@@ -161,76 +151,14 @@ impl IRBuilder for LLVMBuilderRef {
             )
         }
     }
-}
 
-pub trait IRModule {
-    fn add_function(
+    fn build_icmp(
         &self,
+        pred: LLVMIntPredicate,
+        lhs: LLVMValueRef,
+        rhs: LLVMValueRef,
         name: &str,
-        args: &mut [LLVMTypeRef],
-        return_type: LLVMTypeRef,
-    ) -> LLVMValueRef;
-}
-
-impl IRModule for LLVMModuleRef {
-    fn add_function(
-        &self,
-        name: &str,
-        args: &mut [LLVMTypeRef],
-        return_type: LLVMTypeRef,
     ) -> LLVMValueRef {
-        unsafe {
-            let len = args.len();
-            let function_type = LLVMFunctionType(return_type, args.as_mut_ptr(), len as u32, 0);
-            LLVMAddFunction(*self, cstr!(name), function_type)
-        }
+        unsafe { LLVMBuildICmp(*self, pred, lhs, rhs, cstr!(name)) }
     }
 }
-
-pub trait IRContext {
-    fn append_basic_block(&self, function: LLVMValueRef, name: &str) -> LLVMBasicBlockRef;
-}
-
-impl IRContext for LLVMContextRef {
-    fn append_basic_block(&self, function: LLVMValueRef, name: &str) -> LLVMBasicBlockRef {
-        unsafe { LLVMAppendBasicBlockInContext(*self, function, cstr!(name)) }
-    }
-}
-
-impl Codegen {
-    pub fn make_int_const(&self, value: u64) -> LLVMValueRef {
-        unsafe { LLVMConstInt(self.types.u64, value, 0) }
-    }
-
-    pub fn true_value(&self) -> LLVMValueRef {
-        self.make_int_const(1)
-    }
-
-    pub fn false_value(&self) -> LLVMValueRef {
-        self.make_int_const(1)
-    }
-}
-
-macro_rules! pointer_type {
-    ($e:expr) => {
-        unsafe { LLVMPointerType($e, 0) }
-    };
-}
-
-macro_rules! function_type {
-    ($return_type:expr, $arg_type:expr; $n:expr) => {{
-        let mut args_types = vec![$arg_type; $n];
-        unsafe {
-            LLVMFunctionType($return_type, args_types.as_mut_ptr(), args_types.len() as u32, 0)
-        }
-    }};
-    ($return_type:expr, $($args:expr),+ $(,)?) => {{
-        let mut args_types = [$($args),+];
-        unsafe {
-            LLVMFunctionType($return_type, args_types.as_mut_ptr(), args_types.len() as u32, 0)
-        }
-    }};
-}
-
-pub(crate) use function_type;
-pub(crate) use pointer_type;

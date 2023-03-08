@@ -4,7 +4,7 @@ use crate::{runtime::primitives::AnyPtr, specialized::Term};
 use llvm_sys::LLVMIntPredicate::LLVMIntEQ;
 
 use super::{
-    builder::{IRBuilder, IRContext, IRModule},
+    helpers::{IRBuilder, IRContext, IRModule},
     *,
 };
 
