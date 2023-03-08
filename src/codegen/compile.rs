@@ -3,7 +3,10 @@ use im::HashMap;
 use crate::{runtime::primitives::AnyPtr, specialized::Term};
 use llvm_sys::LLVMIntPredicate::LLVMIntEQ;
 
-use super::*;
+use super::{
+    helpers::{IRBuilder, IRContext, IRModule},
+    *,
+};
 
 pub type Result<T = LLVMValueRef> = std::result::Result<T, CompileError>;
 
@@ -16,50 +19,36 @@ pub enum CompileError {
 
 impl Codegen {
     pub fn compile_main(&mut self, term: Term) -> Result<()> {
-        unsafe {
-            self.delete_main_if_exists();
+        self.delete_main_if_exists();
 
-            let main_t = LLVMFunctionType(self.types.ptr, [].as_mut_ptr(), 0, 0);
-            let main = LLVMAddFunction(self.module, cstr!("main"), main_t);
+        let main = self.module.add_function("main", &mut [], self.types.ptr);
+        let entry = self.context.append_basic_block(main, "entry");
 
-            let entry = LLVMAppendBasicBlockInContext(self.context, main, cstr!("entry"));
-            LLVMPositionBuilderAtEnd(self.builder, entry);
+        self.builder.position_at_end(entry);
+        self.current_fn = main;
 
-            self.current_fn = main;
+        let value = self.compile_term(term)?;
+        self.builder.build_ret(value);
 
-            let value = self.compile_term(term)?;
-            LLVMBuildRet(self.builder, value);
-
-            Ok(())
-        }
+        Ok(())
     }
 
     pub fn make_if(&self, cond: LLVMValueRef) -> LLVMValueRef {
-        unsafe {
-            let is_true = self.make_call("prim__Value_is_true", &mut [cond]);
-            let true_v = LLVMConstInt(self.types.i1, 1, 0);
+        let is_true = self.make_call("prim__Value_is_true", &mut [cond]);
+        let true_value = self.true_value();
 
-            LLVMBuildICmp(self.builder, LLVMIntEQ, is_true, true_v, cstr!())
-        }
+        self.builder.build_icmp(LLVMIntEQ, is_true, true_value, "")
     }
 
     pub fn make_call(&self, name: &str, args: &mut [LLVMValueRef]) -> LLVMValueRef {
-        unsafe {
-            let symbol_ref = self
-                .environment
-                .symbols
-                .get(name)
-                .unwrap_or_else(|| panic!("No such primitive: {name}"));
+        let symbol_ref = self
+            .environment
+            .symbols
+            .get(name)
+            .unwrap_or_else(|| panic!("No such primitive: {name}"));
 
-            LLVMBuildCall2(
-                self.builder,
-                symbol_ref.value_type,
-                symbol_ref.value,
-                args.as_mut_ptr(),
-                args.len() as u32,
-                cstr!(),
-            )
-        }
+        self.builder
+            .build_call(symbol_ref.kind, symbol_ref.value, args, "")
     }
 
     pub fn enter_scope(&mut self) {
@@ -75,7 +64,7 @@ impl Codegen {
         self.environment = self.environment.super_environment.clone().unwrap();
     }
 
-    unsafe fn delete_main_if_exists(&self) {
+    fn delete_main_if_exists(&self) {
         unsafe {
             let main = LLVMGetNamedFunction(self.module, cstr!("main"));
 
@@ -88,7 +77,7 @@ impl Codegen {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SymbolRef {
-    pub value_type: LLVMTypeRef,
+    pub kind: LLVMTypeRef,
     pub value: LLVMValueRef,
     pub addr: AnyPtr,
     pub arity: Option<u16>,
@@ -97,7 +86,7 @@ pub struct SymbolRef {
 impl SymbolRef {
     pub fn new(value_type: LLVMTypeRef, value: LLVMValueRef) -> Self {
         Self {
-            value_type,
+            kind: value_type,
             value,
             addr: std::ptr::null_mut(),
             arity: None,
@@ -140,7 +129,7 @@ impl Environment {
             let value_type = LLVMFunctionType(return_type, args.as_mut_ptr(), args.len() as _, 0);
             let value = LLVMAddFunction(self.module, cstr!(name), value_type);
             let symbol_ref = SymbolRef {
-                value_type,
+                kind: value_type,
                 value,
                 addr,
                 arity: Some(args.len() as _),
