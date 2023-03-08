@@ -11,6 +11,8 @@ extern crate lalrpop_util;
 
 lalrpop_mod!(pub soft);
 
+pub use soft::TermParser as Parser;
+
 #[cfg(test)]
 mod tests {
     use super::*;

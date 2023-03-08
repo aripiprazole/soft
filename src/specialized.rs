@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     runtime::{Value, ValueRef},
     util::bool_enum,
@@ -12,7 +14,7 @@ pub enum Term {
     Let(Vec<(String, Term)>, Box<Term>),
     App(Box<Term>, Vec<Term>),
     Closure(Vec<(String, Term)>, Box<Term>),
-    EnvRef(Box<Term>, String),
+    EnvRef(String),
     Set(String, IsMacro, Box<Term>),
     Call(u64, Vec<Term>),
     LocalRef(String),
@@ -20,6 +22,103 @@ pub enum Term {
     Num(u64),
     Quote(Box<Term>),
     Nil,
+}
+
+pub enum Mode {
+    Interperse,
+    Before,
+}
+
+pub struct Spaced<'a, T>(Mode, &'static str, &'a [T])
+where
+    T: Display;
+
+impl<'a, T> Display for Spaced<'a, T>
+where
+    T: Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Mode::Interperse => {
+                if !self.2.is_empty() {
+                    write!(f, "{}", self.2[0])?;
+                    for el in &self.2[1..] {
+                        write!(f, "{}{}", self.1, el)?;
+                    }
+                }
+            }
+            Mode::Before => {
+                for el in self.2 {
+                    write!(f, "{}{}", self.1, el)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl Display for Term {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Term::Lam(lifted, names, body) => {
+                write!(f, "(lambda")?;
+
+                if let Lifted::Yes = lifted {
+                    write!(f, "*")?;
+                }
+
+                write!(f, " (")?;
+                write!(f, "{}", Spaced(Mode::Interperse, " ", names))?;
+                write!(f, ") ")?;
+                write!(f, "{body}")?;
+                write!(f, ")")
+            }
+            Term::Let(names, next) => {
+                write!(f, "(let")?;
+
+                write!(f, " (")?;
+
+                if !names.is_empty() {
+                    write!(f, "({} {})", names[0].0, names[0].1)?;
+                    for (name, val) in &names[1..] {
+                        write!(f, " ({} {})", name, val)?;
+                    }
+                }
+
+                write!(f, ") ")?;
+                write!(f, "{next}")?;
+                write!(f, ")")
+            }
+            Term::App(head, tail) => {
+                write!(f, "(~{}{})", head, Spaced(Mode::Before, " ", tail))
+            }
+            Term::Closure(args, body) => {
+                let names: Vec<_> = args.iter().map(|x| format!("({} {})", x.0, x.1)).collect();
+                write!(
+                    f,
+                    "(mk-closure {body} ({}))",
+                    Spaced(Mode::Interperse, " ", &names)
+                )
+            }
+            Term::EnvRef(name) => {
+                write!(f, "(env-ref {})", name)
+            }
+            Term::Set(name, IsMacro::Yes, value) => {
+                write!(f, "(setm* {name} {value})")
+            }
+            Term::Set(name, IsMacro::No, value) => {
+                write!(f, "(set* {name} {value})")
+            }
+            Term::Call(head, tail) => {
+                write!(f, "({}{})", head, Spaced(Mode::Before, " ", tail))
+            }
+            Term::LocalRef(n) => write!(f, "{n}"),
+            Term::GlobalRef(n) => write!(f, "#{n}"),
+            Term::Num(n) => write!(f, "{n}"),
+            Term::Quote(expr) => write!(f, "'{expr}"),
+            Term::Nil => write!(f, "nil"),
+        }
+    }
 }
 
 impl Term {

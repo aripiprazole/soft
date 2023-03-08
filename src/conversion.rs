@@ -1,21 +1,15 @@
-use im::{HashMap, HashSet};
+use im::HashSet;
 
 use crate::specialized::{Lifted, Term};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Closure {
     pub env: HashSet<String>,
-    pub subst: HashMap<String, Term>,
-}
-
-impl Default for Closure {
-    fn default() -> Self {
-        Closure::new(HashSet::default(), HashMap::default())
-    }
+    pub subst: HashSet<String>,
 }
 
 impl Closure {
-    pub fn new(env: HashSet<String>, subst: HashMap<String, Term>) -> Self {
+    pub fn new(env: HashSet<String>, subst: HashSet<String>) -> Self {
         Self { env, subst }
     }
 
@@ -23,7 +17,7 @@ impl Closure {
         self.with_subst(self.subst.clone())
     }
 
-    pub fn with_subst(&self, subst: HashMap<String, Term>) -> Self {
+    pub fn with_subst(&self, subst: HashSet<String>) -> Self {
         Closure {
             env: self.env.clone(),
             subst,
@@ -35,23 +29,22 @@ impl Closure {
 
         match term {
             Quote(quoted) => Quote(box self.convert(*quoted)),
-            EnvRef(env_value, index) => EnvRef(box self.convert(*env_value), index),
+            EnvRef(name) => EnvRef(name),
             Set(name, is_macro, value) => Set(name, is_macro, box self.convert(*value)),
-            LocalRef(symbol) | GlobalRef(symbol) if self.subst.contains_key(&symbol) => {
-                self.subst[&symbol].clone()
-            }
+            LocalRef(symbol) | GlobalRef(symbol) if self.subst.contains(&symbol) => EnvRef(symbol),
             GlobalRef(symbol) if self.env.contains(&symbol) => LocalRef(symbol),
             Call(address, args) => Call(
                 address,
                 args.into_iter().map(|arg| self.convert(arg)).collect(),
             ),
-            Closure(env_values, lam) => Closure(
-                env_values
+            Closure(env_values, lam) => {
+                let env_values = env_values
                     .into_iter()
                     .map(|(name, value)| (name, self.convert(value)))
-                    .collect(),
-                box self.convert(*lam),
-            ),
+                    .collect();
+
+                Closure(env_values, box self.convert(*lam))
+            }
             App(callee, args) => App(
                 box self.convert(*callee),
                 args.into_iter().map(|arg| self.convert(arg)).collect(),
@@ -59,46 +52,31 @@ impl Closure {
             Lam(Lifted::Yes, args, body) => {
                 let mut closure = self.extend();
 
-                for name in args.iter() {
-                    closure.env.insert(name.clone());
-                    closure.subst.remove(name);
-                }
+                closure.env.extend(args.iter().cloned());
+                closure.subst.retain(|name| !args.contains(name));
 
                 let body = box closure.convert(*body);
 
                 Lam(Lifted::Yes, args, body)
             }
-            Lam(Lifted::No, mut args, body) => {
+            Lam(Lifted::No, args, body) => {
                 let mut closure = self.extend();
 
-                for name in args.iter() {
-                    closure.env.insert(name.clone());
-                    closure.subst.remove(name);
-                }
+                closure.env.extend(args.iter().cloned());
+                closure.subst.retain(|name| !args.contains(name));
 
                 let fv = free_vars(&body);
 
                 let closure_refs = closure
                     .env
-                    .iter()
-                    .cloned()
-                    .collect::<HashSet<String>>()
+                    .clone()
                     .relative_complement(args.iter().cloned().collect())
                     .intersection(fv);
 
-                let new_subst = closure_refs
-                    .iter()
-                    .map(|name| {
-                        let term = EnvRef(box LocalRef("env".to_string()), name.clone());
-                        (name.clone(), term)
-                    })
-                    .collect::<HashMap<String, Term>>();
+                let is_closure = closure_refs.is_empty();
+                let body = box closure.with_subst(closure_refs.clone()).convert(*body);
 
-                let is_closure = new_subst.is_empty();
-
-                let body = box closure.with_subst(new_subst).convert(*body);
-
-                if is_closure {
+                let result = if is_closure {
                     Lam(Lifted::Yes, args, body)
                 } else {
                     let env_values = closure_refs
@@ -106,10 +84,10 @@ impl Closure {
                         .map(|name| (name.clone(), LocalRef(name.clone())))
                         .collect();
 
-                    args.push("env".to_string());
-
                     Closure(env_values, box Lam(Lifted::Yes, args, body))
-                }
+                };
+
+                self.convert(result)
             }
             Let(entries, body) => {
                 let mut new_entries: Vec<(String, Term)> = vec![];
@@ -131,12 +109,15 @@ impl Closure {
     }
 }
 
+pub fn convert(term: Term) -> Term {
+    Closure::convert(&mut Default::default(), term)
+}
+
 fn free_vars(term: &Term) -> im::HashSet<String> {
     use Term::*;
 
     match term {
         Closure(_, lam) => free_vars(lam).iter().collect(),
-        EnvRef(env_value, _) => free_vars(env_value),
         Set(_, _, value) => free_vars(value),
         Call(_, args) => args.iter().flat_map(free_vars).collect(),
         Quote(quoted) => free_vars(quoted),
@@ -167,7 +148,7 @@ fn free_vars(term: &Term) -> im::HashSet<String> {
 
             body_fv.union(fv)
         }
-        Num(_) | Nil => Default::default(),
+        EnvRef(_) | Num(_) | Nil => Default::default(),
     }
 }
 
@@ -199,9 +180,9 @@ mod tests {
                 vec![("a".to_string(), Term::LocalRef("a".to_string()))],
                 box Term::Lam(
                     Lifted::Yes,
-                    vec!["b".to_string(), "env".to_string()],
+                    vec!["b".to_string()],
                     box Term::App(
-                        box Term::EnvRef(box Term::LocalRef("env".to_string()), "a".to_string()),
+                        box Term::EnvRef("a".to_string()),
                         vec![Term::LocalRef("b".to_string())],
                     ),
                 ),
