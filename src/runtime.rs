@@ -4,7 +4,6 @@ use std::fmt::{Debug, Display};
 pub enum Value {
     Cons(ValueRef, ValueRef),
     Atom(String),
-    Quote(ValueRef),
     Nil,
 }
 
@@ -34,7 +33,6 @@ impl Display for ValueRef {
             match value {
                 Value::Cons(head, tail) => write!(f, "({} {})", head, tail),
                 Value::Nil => write!(f, "nil"),
-                Value::Quote(value) => write!(f, "'{}", value),
                 Value::Atom(value) => write!(f, "{}", value),
             }
         }
@@ -62,7 +60,10 @@ impl ValueRef {
     }
 
     pub fn quote(value: ValueRef) -> ValueRef {
-        ValueRef::new(Value::Quote(value))
+        ValueRef::new(Value::Cons(
+            ValueRef::new(Value::Atom("quote".to_string())),
+            value,
+        ))
     }
 
     pub fn atom(value: String) -> ValueRef {
@@ -71,7 +72,6 @@ impl ValueRef {
 
     pub fn new(value: Value) -> ValueRef {
         let ptr = Box::leak(box value);
-
         ValueRef(ptr as *const Value as u64)
     }
 
