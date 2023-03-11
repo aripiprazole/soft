@@ -238,24 +238,32 @@ mod tests {
     fn test_cons() {
         let va = Int::new(42).into();
         let vb = Nil.into();
-        let cons: Value = Cons::new(va, vb).into();
-        let cons: Value = Cons::new(cons, cons).into();
+        let cons1: Value = Cons::new(va, vb).into();
+        let cons: Value = Cons::new(cons1, cons1).into();
 
         let r = cons.classify();
-        assert_eq!(r.to_string(), "((42) 42)")
+        assert_eq!(r.to_string(), "((42) 42)");
+
+        cons.free();
+        cons1.free();
     }
 
     #[test]
     fn test_vector() {
         let va = Int::new(42).into();
-        let vb = Nil.into();
-        let cons: Value = Cons::new(va, vb).into();
-        let cons: Value = Cons::new(cons, cons).into();
+        let vb = Str::new("eu amo a gabii".to_string()).into();
+        let cons1: Value = Cons::new(va, vb).into();
+        let cons: Value = Cons::new(cons1, cons1).into();
 
         let vector: Value = Vector::new(vec![cons, cons]).into();
 
         let r = vector.classify();
-        assert_eq!(r.to_string(), "[((42) 42) ((42) 42)]")
+        assert_eq!(r.to_string(), "[((42 . \"eu amo a gabii\") 42 . \"eu amo a gabii\") ((42 . \"eu amo a gabii\") 42 . \"eu amo a gabii\")]");
+
+        vb.free();
+        vector.free();
+        cons.free();
+        cons1.free();
     }
 
     #[test]
