@@ -15,7 +15,6 @@ where
     fn untag<'a>(ptr: Ptr<Self>) -> Cow<'a, Self> {
         Cow::Borrowed(unsafe { ((ptr.0 & MASK) as *const Self).as_ref().unwrap() })
     }
-
 }
 
 impl Tagged for Int {

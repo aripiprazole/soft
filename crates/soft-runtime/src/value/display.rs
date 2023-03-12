@@ -123,4 +123,3 @@ impl Display for Value {
         write!(f, "{}", FatPtr::from(self.0))
     }
 }
-

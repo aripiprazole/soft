@@ -7,10 +7,10 @@ use std::marker::PhantomData;
 
 use self::pointer::*;
 
-pub mod freeable;
 pub mod display;
-pub mod tagged;
+pub mod freeable;
 pub mod pointer;
+pub mod tagged;
 
 pub const INT: u64 = 0b00_000;
 pub const CONS: u64 = 0b00_001;
@@ -36,4 +36,3 @@ impl Value {
         self.0.into()
     }
 }
-

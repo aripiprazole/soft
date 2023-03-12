@@ -88,7 +88,7 @@ pub enum FatPtr {
     Nil,
 }
 
-impl<T :Tagged> Ptr<T> {
+impl<T: Tagged> Ptr<T> {
     #[inline]
     pub fn new(ptr: u64) -> Self {
         Self(ptr, PhantomData)
@@ -131,35 +131,17 @@ impl Vector {
 
         unsafe { *self.data.add(index as usize).as_ref().unwrap() }
     }
-
-    pub fn free(&self) {
-        unsafe {
-            dealloc(
-                self.data as _,
-                Layout::array::<Value>(self.size as usize).unwrap(),
-            )
-        }
-    }
 }
 
 impl Str {
     pub fn new(str: String) -> Str {
         Str(Box::leak(str.into_boxed_str()))
     }
-
-    pub fn free(&self) {
-        let size = self.0.as_bytes().len();
-        unsafe { dealloc(self.0.as_ptr() as _, Layout::array::<u8>(size).unwrap()) }
-    }
 }
 
 impl Closure {
     pub fn new(env: Vector, addr: FunPtr) -> Closure {
         Closure { env, addr }
-    }
-
-    pub fn free(&self) {
-        self.env.free();
     }
 }
 
