@@ -8,7 +8,7 @@ use std::fmt::Display;
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Point {
     pub line: u64,
-    pub column: u64
+    pub column: u64,
 }
 
 impl Point {
@@ -34,14 +34,13 @@ impl Display for Point {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Range {
     pub start: Point,
-    pub end: Point
+    pub end: Point,
 }
 
 impl Range {
     pub fn new(start: Point, end: Point) -> Self {
         Self { start, end }
     }
-
 }
 
 impl Display for Range {
@@ -57,13 +56,13 @@ impl Display for Range {
 /// (print "ata")
 /// ```
 #[derive(Debug)]
-pub enum Expr<'a> {
+pub enum Expr {
     /// A symbol is a globally available constant that is defined by it's name
     /// that is O(1) for comparison.
-    Symbol(Range, &'a str),
+    Symbol(Range, String),
 
     /// An identifier is a name that is used to reference a variable or a function.
-    Id(Range, &'a str),
+    Id(Range, String),
 
     /// A string literal. It's represented as a UTF-8 array that cannot be indexed.
     Str(Range, String),
@@ -72,10 +71,16 @@ pub enum Expr<'a> {
     Num(Range, u64),
 
     /// A list is every expression that is surrounded by parenthesis.
-    List(Range, Vec<Expr<'a>>),
+    List(Range, Vec<Expr>),
 }
 
-impl<'a> fmt::Display for Expr<'a> {
+impl Expr {
+    pub fn is_identifier(&self) -> bool {
+        matches!(self, Expr::Id(_, _))
+    }
+}
+
+impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Expr::Symbol(_, s) => write!(f, ":{s}"),
@@ -91,89 +96,5 @@ impl<'a> fmt::Display for Expr<'a> {
                     .join(" ")
             ),
         }
-    }
-}
-
-macro_rules! sexpr_match_list {
-    (($($out:tt)*) => @ $name:ident ($($t:tt)*) $($rest:tt)*) => {
-        sexpr_match_list!(
-            $($out)*, $crate::syntax::Expr::List(_, $name) =>
-            $($rest)*
-        )
-    };
-    (($($out:tt)*) => <$s:literal> $($rest:tt)*) => {
-        sexpr_match_list!(
-            $($out)*, $crate::syntax::Expr::Id(_, $name) =>
-            $($rest)*
-        )
-    };
-    (($($out:tt)*) => <$s:ident:expr> $($rest:tt)*) => {
-        sexpr_match_list!(
-            $($out)*, $s =>
-            $($rest)*
-        )
-    };
-    (($($out:tt)*) => $s:literal $($rest:tt)*) => {
-        sexpr_match_list!(
-            $($out)* $crate::syntax::Expr::Id(_, $s) =>
-            $($rest)*
-        )
-    };
-    ( $out:pat => $($rest:tt)*) => { $out };
-}
-
-macro_rules! sexpr_match_pat {
-    (@ $name:ident ($($t:tt)*) ) => {
-        $crate::syntax::Expr::List(_, $name)
-    };
-    (<$s:literal>) => {
-        $crate::syntax::Expr::Id(_, $s)
-    };
-    (<$s:ident:expr>) => {
-        $s
-    };
-    ($s:literal) => {
-        $crate::syntax::Expr::Id(_, $s)
-    };
-}
-
-macro_rules! sexpr_match_expr {
-    ($expr:expr, <$s:literal>) => {$expr};
-    ($expr:expr, <$s:ident:expr>) => {$expr};
-    ($expr:expr, $s:literal) => {$expr};
-    ($expr:expr, @$name:ident($($t:tt)*)) => {
-
-        match $name.as_slice() {
-            [
-                sexpr_match_list!(() => $($t)*)] => $expr,
-            _ => todo!()
-        }
-    }
-}
-
-macro_rules! sexpr_match {
-    ($name:expr, $($clause:tt => $expr:expr),*) => {
-        match $name {
-            $(sexpr_match_pat!($clause) => sexpr_match_expr!($clause, $expr),)*
-            _ => panic!("pudim")
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Expr;
-
-    #[test]
-    pub fn test() {
-        let t = Expr::List(Default::default(), vec![
-            Expr::Id(Default::default(), "set!"),
-            Expr::Id(Default::default(), "a"),
-            Expr::Num(Default::default(), 3),
-        ]);
-
-        let r = match todo!() {
-            sexpr_match_pat!(@l("set!" <a>)) => sexpr_match_expr!(2, @l("set!" <a>))
-        };
     }
 }

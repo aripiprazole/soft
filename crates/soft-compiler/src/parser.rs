@@ -27,7 +27,7 @@ pub fn is_reserved_char(c: char) -> bool {
     matches!(c, '(' | ')' | ':')
 }
 
-/// Checks if it's a valid identifier character. A valid identifier is anything that is not a 
+/// Checks if it's a valid identifier character. A valid identifier is anything that is not a
 /// whitespace or a reserved character.
 pub fn is_identifier_char(c: char) -> bool {
     !c.is_whitespace() && !is_reserved_char(c)
@@ -38,10 +38,8 @@ pub struct Parser<'a> {
     iterator: Peekable<Chars<'a>>,
     start: Point,
     current: Point,
-    stack: Vec<Expr<'a>>,
+    stack: Vec<Expr>,
     indices: Vec<(usize, Point)>,
-    code: &'a str,
-    index: usize
 }
 
 impl<'a> Parser<'a> {
@@ -52,8 +50,6 @@ impl<'a> Parser<'a> {
             current: Default::default(),
             stack: Default::default(),
             indices: Default::default(),
-            code,
-            index: 0,
         }
     }
 
@@ -65,8 +61,8 @@ impl<'a> Parser<'a> {
         chr
     }
 
-    pub fn peek(&mut self) -> Option<&char> {
-        self.iterator.peek()
+    pub fn peek(&mut self) -> Option<char> {
+        self.iterator.peek().cloned()
     }
 
     pub fn set_start(&mut self) {
@@ -87,11 +83,10 @@ impl<'a> Parser<'a> {
         Ok(Expr::Num(self.range(), num))
     }
 
-    pub fn parse_identifier(&mut self, mut id: usize) -> Result<usize, ParseError> {
-        while let Some(&c) = self.peek() {
+    pub fn parse_identifier(&mut self, mut id: String) -> Result<String, ParseError> {
+        while let Some(c) = self.peek() {
             if is_identifier_char(c) {
-                id += c.len_utf8();
-                self.index += c.len_utf8();
+                id.push(c);
                 self.next_char();
             } else {
                 break;
@@ -100,14 +95,14 @@ impl<'a> Parser<'a> {
         Ok(id)
     }
 
-    pub fn parse_id(&mut self) -> Result<Expr, ParseError> {
-        let str = self.parse_identifier(1)?;
-        Ok(Expr::Id(self.range(), &self.code[self.index..self.index+str]))
+    pub fn parse_id(&mut self, char: char) -> Result<Expr, ParseError> {
+        let str = self.parse_identifier(char.to_string())?;
+        Ok(Expr::Id(self.range(), str))
     }
 
     pub fn parse_atom(&mut self) -> Result<Expr, ParseError> {
-        let str = self.parse_identifier(0)?;
-        Ok(Expr::Symbol(self.range(), &self.code[self.index..self.index+str]))
+        let str = self.parse_identifier(Default::default())?;
+        Ok(Expr::Symbol(self.range(), str))
     }
 
     pub fn parse_char(&mut self) -> Result<char, ParseError> {
@@ -166,7 +161,7 @@ impl<'a> Parser<'a> {
                 '0'..='9' => self.parse_number(c),
                 '"' => self.parse_string(),
                 ':' => self.parse_atom(),
-                _ => self.parse_id(),
+                c => self.parse_id(c),
             };
             self.stack.push(result?);
             self.set_start();
