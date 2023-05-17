@@ -2,6 +2,10 @@
 //! used to represent the AST of the language in a easier way by classifying structures that can be
 //! optimized by compilation.
 
+use std::fmt::{Formatter, Display};
+
+use crate::syntax::Expr;
+
 /// This enum represents if a lambda was lifted or not to the global scope.
 #[derive(Clone, Copy, Debug)]
 pub enum Lifted {
@@ -70,7 +74,7 @@ pub struct SetNode {
 /// Represents a quote that is used to prevent evaluation of a term.
 #[derive(Debug, Clone)]
 pub struct QuoteNode {
-    pub value: Box<Term>,
+    pub value: Box<Expr>,
 }
 
 /// Represents a cons cell that is used to represent a list.
@@ -141,7 +145,7 @@ impl Term {
         })
     }
 
-    pub fn quote(value: Term) -> Self {
+    pub fn quote(value: Expr) -> Self {
         Self::Quote(QuoteNode {
             value: Box::new(value),
         })
@@ -160,5 +164,36 @@ impl Term {
             then: Box::new(then),
             else_: Box::new(else_),
         })
+    }
+}
+
+impl Display for AtomNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, ":{}", self.name)
+    }
+}
+
+impl Display for LambdaNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(lambda (")?;
+        for arg in &self.args {
+            write!(f, "{} ", arg)?;
+        }
+        write!(f, ") ")?;
+        for term in &self.body {
+            write!(f, "{} ", term)?;
+        }
+        write!(f, ")")
+    }
+}
+
+impl Display for ApplicationNode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(")?;
+        write!(f, "{} ", self.function)?;
+        for arg in &self.arguments {
+            write!(f, "{} ", arg)?;
+        }
+        write!(f, ")")
     }
 }

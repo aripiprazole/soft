@@ -55,7 +55,7 @@ impl Display for Range {
 /// ```lisp
 /// (print "ata")
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     /// A symbol is a globally available constant that is defined by it's name
     /// that is O(1) for comparison.

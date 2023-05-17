@@ -73,20 +73,24 @@ fn fallback_call(env: Env, from: &[Expr]) -> Term {
 /// Specializes a list of expressions into a term if it fits any specialization.
 fn from_call(env: Env, from: &[Expr]) -> Term {
     match from {
+        [Expr::Id(_, str)] if str == "nil" => Term::literal(LiteralNode::Nil),
         [Expr::Id(_, str), Expr::List(_, args), rest @ ..] if str == "lambda" => {
             let args = args
                 .iter()
                 .map(matches!(Expr::Id(_, name) => name.clone()))
-                .flatten()
-                .collect::<Vec<String>>();
+                .collect::<Option<Vec<String>>>();
 
-            let mut body = Vec::new();
+            if let Some(args) = args {
+                let mut body = Vec::new();
 
-            for expr in rest {
-                body.push(from_default(env.clone(), expr));
+                for expr in rest {
+                    body.push(from_default(env.clone(), expr));
+                }
+
+                Term::lambda(args, body, Lifted::No)
+            } else {
+                fallback_call(env, from)
             }
-
-            Term::lambda(args, body, Lifted::No)
         }
         [Expr::Id(_, str), Expr::Id(_, name), expr] if str == "setm!" => {
             Term::set(name.to_string(), from_default(env, expr), IsMacro::Yes)
@@ -94,11 +98,14 @@ fn from_call(env: Env, from: &[Expr]) -> Term {
         [Expr::Id(_, str), Expr::Id(_, name), expr] if str == "set!" => {
             Term::set(name.to_string(), from_default(env, expr), IsMacro::No)
         }
+        [Expr::Id(_, str), x] if str == "quote" => {
+            Term::quote(x.clone())
+        }
         [Expr::Id(_, str), x, xs] if str == "cons" => {
             Term::cons(from_default(env.clone(), x), from_default(env, xs))
         }
-        [Expr::Id(_, str)] if str == "nil" => {
-            Term::literal(LiteralNode::Nil)
+        [Expr::Id(_, str), cond, then, els] if str == "if" => {
+            Term::cond(from_default(env.clone(), cond), from_default(env.clone(), then), from_default(env, els))
         }
         _ => fallback_call(env, from),
     }
