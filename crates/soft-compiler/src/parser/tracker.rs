@@ -1,3 +1,4 @@
+//! This module defines a [Tracker] structure that is used to keep track of
 use std::{iter::Peekable, ops::Range, str::Chars};
 
 use crate::location::Loc;
@@ -31,8 +32,8 @@ impl<'a> Tracker<'a> {
     }
 
     /// Peeks the next character in the iterator.
-    pub fn peek(&mut self) -> Option<&char> {
-        self.peekable.peek()
+    pub fn peek(&mut self) -> Option<char> {
+        self.peekable.peek().cloned()
     }
 
     /// Gets the next character.

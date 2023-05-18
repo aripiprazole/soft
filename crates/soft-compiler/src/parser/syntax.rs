@@ -31,6 +31,8 @@ pub enum ExprKind<'a> {
     List(Vec<Expr<'a>>),
 }
 
+/// A ExprKind with a range of positions in the source code. It's used in order to make better error
+/// messages.
 #[derive(Debug, Clone)]
 pub struct Expr<'a> {
     pub kind: ExprKind<'a>,
