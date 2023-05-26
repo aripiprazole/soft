@@ -67,7 +67,7 @@ impl<'a> Parser<'a> {
 
     #[inline(always)]
     fn next(&mut self) -> Option<char> {
-        self.tracker.next()
+        self.tracker.next_char()
     }
 
     #[inline(always)]
@@ -95,7 +95,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let expr = Expr::new(ExprKind::Number(num), self.tracker.pop_range());
+        let expr = Expr::new(self.tracker.pop_range(), ExprKind::Number(num));
         self.stack.push(expr);
 
         Ok(())
@@ -111,7 +111,7 @@ impl<'a> Parser<'a> {
         self.save_jump();
         let index = self.indices.pop().unwrap();
         let stack = self.stack.split_off(index);
-        let expr = Expr::new(ExprKind::List(stack), self.tracker.pop_range());
+        let expr = Expr::new(self.tracker.pop_range(), ExprKind::List(stack));
         self.stack.push(expr);
         Ok(())
     }
@@ -120,13 +120,13 @@ impl<'a> Parser<'a> {
         self.save_jump();
 
         while self.peek().map(is_identifier_char).unwrap_or_default() {
-            self.tracker.next();
+            self.tracker.next_char();
         }
 
         let range = self.tracker.pop_range();
         let expr = Expr::new(
-            ExprKind::Identifier(self.tracker.substring(range.clone())),
-            range,
+            range.clone(),
+            ExprKind::Identifier(self.tracker.substring(range)),
         );
         self.stack.push(expr);
 
@@ -148,7 +148,7 @@ impl<'a> Parser<'a> {
 
         let range = self.tracker.pop_range();
 
-        let expr = Expr::new(ExprKind::Atom(self.tracker.substring(range.clone())), range);
+        let expr = Expr::new(range.clone(), ExprKind::Atom(self.tracker.substring(range)));
 
         self.stack.push(expr);
 

@@ -7,7 +7,7 @@ use std::{
 };
 
 /// Byte address of a character in the source code.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Loc(pub usize);
 
 /// Data localized in the code with [Range<Loc>]. The reason to store the location span, is to
@@ -18,9 +18,23 @@ pub struct Spanned<T> {
     pub loc: Range<Loc>,
 }
 
-impl<T: Debug + Clone> Spanned<T> {
-    pub fn new(data: T, loc: Range<Loc>) -> Self {
+impl<T> Spanned<T> {
+    pub fn new(loc: Range<Loc>, data: T) -> Self {
         Self { data, loc }
+    }
+
+    pub fn map<U>(self, fun: fn(T) -> U) -> Spanned<U> {
+        Spanned {
+            data: fun(self.data),
+            loc: self.loc,
+        }
+    }
+
+    pub fn with<U>(&self, data: U) -> Spanned<U> {
+        Spanned {
+            data,
+            loc: self.loc.clone(),
+        }
     }
 }
 
