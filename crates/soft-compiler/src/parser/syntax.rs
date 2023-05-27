@@ -68,9 +68,9 @@ impl<'a> Expr<'a> {
         }
     }
 
-    pub fn get_list(&mut self) -> Option<&mut [Expr<'a>]> {
+    pub fn get_list(&self) -> Option<&[Expr<'a>]> {
         match self.data {
-            ExprKind::List(ref mut ls) => Some(ls),
+            ExprKind::List(ref ls) => Some(ls),
             _ => None,
         }
     }

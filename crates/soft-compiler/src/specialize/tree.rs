@@ -94,8 +94,8 @@ pub enum PrimKind<'a> {
 /// of it's names, but still uses the names to better error handling and debug.
 #[derive(Clone, Eq, Debug)]
 pub struct Symbol<'a> {
-    pub debug_name: &'a str,
-    pub hash: usize,
+    debug_name: &'a str,
+    hash: usize,
 }
 
 impl<'a> PartialEq for Symbol<'a> {
@@ -119,6 +119,10 @@ impl<'a> Symbol<'a> {
             hash: fxhash::hash(debug_name),
         }
     }
+
+    pub fn name(&self) -> &'a str {
+        self.debug_name
+    }
 }
 
 #[derive(Debug)]
@@ -133,12 +137,6 @@ pub enum VariableKind<'a> {
 
     /// Local variable in the local scope, indexed by [usize].
     Local(usize, Symbol<'a>),
-
-    /// Reference to lambda-lifted variables, that are in the global scope currently, but were
-    /// closures.
-    ///
-    /// TODO: document, and examples
-    Lifted(usize),
 }
 
 /// TODO: while, TCO
@@ -175,7 +173,7 @@ pub enum TermKind<'a> {
     /// set!
     ///
     /// A set statement, that sets a variable in the global scope.
-    Set(Symbol<'a>, Box<Term<'a>>, IsMacro),
+    Set(Symbol<'a>, Box<Expr<'a>>, Box<Term<'a>>, IsMacro),
 
     /// lambda!
     ///
@@ -222,18 +220,4 @@ pub struct Definition<'a> {
     pub is_variadic: bool,
     pub parameters: Vec<Symbol<'a>>,
     pub body: Vec<Term<'a>>,
-}
-
-pub struct Function<'a> {
-    pub name: Symbol<'a>,
-
-    /// Definitions can hold the lambda-lifted expressions and the function expression. The first
-    /// item on the [definitions] vec, is the function body's definition.
-    pub definitions: Vec<Definition<'a>>,
-}
-
-// An expression that was lifted to the global scope. It's used for the REPL.
-pub struct Expression<'a> {
-    pub expr: Term<'a>,
-    pub defintions: Vec<Definition<'a>>,
 }
