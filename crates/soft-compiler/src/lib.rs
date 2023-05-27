@@ -5,4 +5,4 @@
 
 pub mod location;
 pub mod parser;
-pub mod spec;
+pub mod specialize;
