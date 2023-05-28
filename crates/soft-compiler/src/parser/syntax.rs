@@ -45,6 +45,35 @@ impl<'a> Expr<'a> {
     pub fn is_identifier(&self) -> bool {
         matches!(self.data, ExprKind::Identifier(_))
     }
+
+    /// This function gets the ownership of the reference without copying it entirely (probably just
+    /// a shallow copy to the stack) and changes it's value to an empty list.
+    pub fn take(&mut self) -> Expr<'a> {
+        let mut result = Spanned {
+            data: ExprKind::List(vec![]),
+            loc: self.loc.clone(),
+        };
+
+        std::mem::swap(self, &mut result);
+
+        result
+    }
+
+    /// Function that makes it easier to get a name from an Expr in order to use a `bind` operation
+    /// on it.
+    pub fn get_identifier(&self) -> Option<&'a str> {
+        match self.data {
+            ExprKind::Identifier(str) => Some(str),
+            _ => None,
+        }
+    }
+
+    pub fn get_list(&mut self) -> Option<&mut [Expr<'a>]> {
+        match self.data {
+            ExprKind::List(ref mut ls) => Some(ls),
+            _ => None,
+        }
+    }
 }
 
 impl<'a> fmt::Display for ExprKind<'a> {

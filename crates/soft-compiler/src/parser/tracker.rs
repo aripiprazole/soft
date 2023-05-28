@@ -37,7 +37,7 @@ impl<'a> Tracker<'a> {
     }
 
     /// Gets the next character.
-    pub fn next(&mut self) -> Option<char> {
+    pub fn next_char(&mut self) -> Option<char> {
         let next = self.peekable.next();
         if let Some(c) = next {
             self.current += Loc(c.len_utf8());
@@ -47,13 +47,13 @@ impl<'a> Tracker<'a> {
 
     /// Jumps to the next character without returning a char.
     pub fn jump(&mut self) {
-        self.next();
+        self.next_char();
     }
 
     /// Saves the current position and then jumps one character.
     pub fn save_jump(&mut self) {
         self.save();
-        self.next();
+        self.next_char();
     }
 
     /// Gets the substring of the current code by a location.

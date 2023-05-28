@@ -41,6 +41,7 @@ pub enum IsLifted {
     No,
 }
 
+#[derive(Debug)]
 pub enum PrimKind<'a> {
     /// Gets the type of an expression and returns it as an atom.
     /// e.g:
@@ -91,7 +92,7 @@ pub enum PrimKind<'a> {
 
 /// Symbol is a struct that makes string comparisons O(1) by comparing it's memoized hash, instead
 /// of it's names, but still uses the names to better error handling and debug.
-#[derive(Clone, Eq)]
+#[derive(Clone, Eq, Debug)]
 pub struct Symbol<'a> {
     pub debug_name: &'a str,
     pub hash: usize,
@@ -120,6 +121,7 @@ impl<'a> Symbol<'a> {
     }
 }
 
+#[derive(Debug)]
 pub enum VariableKind<'a> {
     /// Global variable in the environment, indexed by [Symbol], it can be accessed using the hash
     /// property in the [Symbol] struct.
@@ -130,7 +132,7 @@ pub enum VariableKind<'a> {
     Global(Symbol<'a>),
 
     /// Local variable in the local scope, indexed by [usize].
-    Local(usize, &'a str),
+    Local(usize, Symbol<'a>),
 
     /// Reference to lambda-lifted variables, that are in the global scope currently, but were
     /// closures.
@@ -140,6 +142,7 @@ pub enum VariableKind<'a> {
 }
 
 /// TODO: while, TCO
+#[derive(Debug)]
 pub enum TermKind<'a> {
     // S Expressions
     /// An atom is a globally available constant that is defined by it's name that is O(1) for
@@ -167,7 +170,7 @@ pub enum TermKind<'a> {
     /// let!
     ///
     /// A let statement, that sets a variable in the local scope.
-    Let(Vec<(Symbol<'a>, Term<'a>)>),
+    Let(Vec<(Symbol<'a>, Term<'a>)>, Box<Term<'a>>),
 
     /// set!
     ///
@@ -195,7 +198,7 @@ pub enum TermKind<'a> {
     /// A ternary conditional expression. If the scrutinee express a value of truth then it executes
     /// the first branch (the second argument on the variant), otherwise, it executes the second one
     /// (if the second one is None then it returns nil)
-    If(Box<Expr<'a>>, Box<Expr<'a>>, Option<Box<Expr<'a>>>),
+    If(Box<Term<'a>>, Box<Term<'a>>, Box<Term<'a>>),
 
     /// A binary or unary operation iterated expression. It can take an arbitrary number of
     /// arguments.
@@ -214,8 +217,9 @@ pub enum TermKind<'a> {
 /// error messages.
 pub type Term<'a> = Spanned<TermKind<'a>>;
 
+#[derive(Debug)]
 pub struct Definition<'a> {
-    pub variadic_parameter: Option<Symbol<'a>>,
+    pub is_variadic: bool,
     pub parameters: Vec<Symbol<'a>>,
     pub body: Vec<Term<'a>>,
 }
