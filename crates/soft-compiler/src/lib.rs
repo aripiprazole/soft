@@ -4,5 +4,6 @@
 //! defined in the runtime.
 
 pub mod location;
+pub mod mir;
 pub mod parser;
 pub mod spec;
