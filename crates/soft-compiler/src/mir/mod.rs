@@ -4,7 +4,7 @@ use fxhash::FxHashMap;
 
 pub mod stmt;
 
-pub trait HasTerm: Debug + Clone {
+pub trait Instr: Debug + Clone {
     type Term: Debug + Clone;
 }
 
@@ -25,7 +25,7 @@ pub struct Variable {
 }
 
 #[derive(Debug, Clone)]
-pub enum Terminator<I: HasTerm> {
+pub enum Terminator<I: Instr> {
     Unreachable,
     Debug(String),
     Return(I::Term),
@@ -35,7 +35,7 @@ pub enum Terminator<I: HasTerm> {
 
 /// Represents a basic block, composed by a label, a list of variables, a list of instructions
 #[derive(Debug, Clone)]
-pub struct BasicBlock<I: HasTerm> {
+pub struct BasicBlock<I: Instr> {
     /// The basic block's name, usually represented by [Label].
     pub label: String,
 
@@ -55,7 +55,7 @@ impl Label {
     /// Creates a new label for the given basic block.
     ///  * label is a reference to the basic block.
     ///  * label is used to reference the basic block in the graph.
-    pub fn new<I: HasTerm>(to: &BasicBlock<I>) -> Self {
+    pub fn new<I: Instr>(to: &BasicBlock<I>) -> Self {
         Self(to.label.clone())
     }
 }
@@ -71,7 +71,7 @@ impl Debug for Label {
 // because the `I` type parameter is not used in the body of the
 // function.
 #[allow(clippy::derivable_impls)]
-impl<I: HasTerm> Default for BasicBlock<I> {
+impl<I: Instr> Default for BasicBlock<I> {
     fn default() -> Self {
         Self {
             label: String::new(),
@@ -84,7 +84,7 @@ impl<I: HasTerm> Default for BasicBlock<I> {
     }
 }
 
-impl<I: HasTerm> BasicBlock<I> {
+impl<I: Instr> BasicBlock<I> {
     /// Creates a new [BasicBlock] with specified label [label].
     pub fn new(label: &str) -> Self {
         Self {
