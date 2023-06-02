@@ -2,6 +2,8 @@ use std::fmt::{Debug, Formatter};
 
 use fxhash::FxHashMap;
 
+pub mod stmt;
+
 pub trait HasTerm: Debug + Clone {
     type Term: Debug + Clone;
 }
@@ -46,7 +48,7 @@ pub struct BasicBlock<I: HasTerm> {
     ///
     /// These are used to evaluate the [BasicBlock] and to compile the
     /// [BasicBlock] into a LLVM IR.
-    pub(crate) declared_blocks: FxHashMap<String, BasicBlock<I>>,
+    pub declared_blocks: FxHashMap<String, BasicBlock<I>>,
 }
 
 impl Label {
