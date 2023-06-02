@@ -6,4 +6,4 @@
 pub mod location;
 pub mod mir;
 pub mod parser;
-pub mod spec;
+pub mod specialize;
