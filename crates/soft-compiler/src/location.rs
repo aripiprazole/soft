@@ -23,10 +23,10 @@ impl<T> Spanned<T> {
         Self { data, loc }
     }
 
-    pub fn map<U>(self, fun: fn(T) -> U) -> Spanned<U> {
+    pub fn map<U>(&self, fun: fn(&T) -> U) -> Spanned<U> {
         Spanned {
-            data: fun(self.data),
-            loc: self.loc,
+            data: fun(&self.data),
+            loc: self.loc.clone(),
         }
     }
 

@@ -1,4 +1,4 @@
-use std::hash::Hash;
+use std::{fmt::Display, hash::Hash};
 
 use crate::{location::Spanned, parser::syntax::Expr};
 
@@ -41,7 +41,7 @@ pub enum IsLifted {
     No,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PrimKind<'a> {
     /// Gets the type of an expression and returns it as an atom.
     /// e.g:
@@ -88,6 +88,50 @@ pub enum PrimKind<'a> {
 
     /// Sets the value inside of a box.
     BoxSet(Box<Term<'a>>, Box<Term<'a>>),
+
+    /// Gets the environment of a closure.
+    GetEnv(Symbol<'a>),
+
+    // Creates a closure from a function and a list of arguments.
+    CreateClosure(Box<Term<'a>>, Vec<(Symbol<'a>, Term<'a>)>),
+}
+
+impl<'a> Display for PrimKind<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PrimKind::TypeOf(expr) => write!(f, "(type-of {})", expr),
+            PrimKind::Vec(exprs) => {
+                write!(f, "(vec! ")?;
+                for expr in exprs {
+                    write!(f, "{} ", expr)?;
+                }
+                write!(f, ")")
+            }
+            PrimKind::Cons(head, tail) => write!(f, "(cons {} {})", head, tail),
+            PrimKind::Nil => write!(f, "nil"),
+            PrimKind::Head(expr) => write!(f, "(head {})", expr),
+            PrimKind::Tail(expr) => write!(f, "(tail {})", expr),
+            PrimKind::VecIndex(vec, index) => write!(f, "(vec-index {} {})", vec, index),
+            PrimKind::VecLength(vec) => write!(f, "(vec-length {})", vec),
+            PrimKind::VecSet(vec, index, value) => {
+                write!(f, "(vec-set! {} {} {})", vec, index, value)
+            }
+            PrimKind::Box(expr) => write!(f, "(box {})", expr),
+            PrimKind::Unbox(expr) => write!(f, "(unbox {})", expr),
+            PrimKind::BoxSet(expr, value) => write!(f, "(box-set! {} {})", expr, value),
+            PrimKind::GetEnv(expr) => write!(f, "(get-env {})", expr),
+            PrimKind::CreateClosure(func, args) => {
+                write!(f, "(create-closure {} ", func)?;
+                if !args.is_empty() {
+                    write!(f, "({} {})", args[0].0, args[0].1)?;
+                    for (name, arg) in &args[1..] {
+                        write!(f, " ({} {})", name, arg)?;
+                    }
+                }
+                write!(f, ")")
+            }
+        }
+    }
 }
 
 /// Symbol is a struct that makes string comparisons O(1) by comparing it's memoized hash, instead
@@ -125,7 +169,7 @@ impl<'a> Symbol<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum VariableKind<'a> {
     /// Global variable in the environment, indexed by [Symbol], it can be accessed using the hash
     /// property in the [Symbol] struct.
@@ -140,7 +184,7 @@ pub enum VariableKind<'a> {
 }
 
 /// TODO: while, TCO
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TermKind<'a> {
     // S Expressions
     /// An atom is a globally available constant that is defined by it's name that is O(1) for
@@ -211,13 +255,129 @@ pub enum TermKind<'a> {
     Prim(PrimKind<'a>),
 }
 
+impl<'a> Display for Symbol<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.debug_name)
+    }
+}
+
+impl<'a> Display for Term<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.data)
+    }
+}
+
+impl Display for OperationKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OperationKind::Add => write!(f, "+"),
+            OperationKind::Sub => write!(f, "-"),
+            OperationKind::Mul => write!(f, "*"),
+            OperationKind::Div => write!(f, "/"),
+            OperationKind::Mod => write!(f, "%"),
+            OperationKind::Eql => write!(f, "="),
+            OperationKind::Neq => write!(f, "!="),
+            OperationKind::Lte => write!(f, "<"),
+            OperationKind::Ltn => write!(f, "<="),
+            OperationKind::Gte => write!(f, ">"),
+            OperationKind::Gtn => write!(f, ">="),
+            OperationKind::And => write!(f, "&"),
+            OperationKind::Or => write!(f, "|"),
+            OperationKind::Not => write!(f, "!"),
+            OperationKind::Xor => write!(f, "^"),
+            OperationKind::Shl => write!(f, "shl"),
+            OperationKind::Shr => write!(f, "shr"),
+            OperationKind::LAnd => write!(f, "and"),
+            OperationKind::LOr => write!(f, "or"),
+        }
+    }
+}
+
+impl<'a> Display for TermKind<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TermKind::Atom(name) => write!(f, "'{}", name),
+            TermKind::Number(n) => write!(f, "{}", n),
+            TermKind::String(s) => write!(f, "\"{}\"", s),
+            TermKind::Bool(b) => write!(f, "{}", b),
+            TermKind::Variable(v) => match v {
+                VariableKind::Local(_, name) => write!(f, "{}", name),
+                VariableKind::Global(name) => write!(f, "#{}", name),
+            },
+            TermKind::Let(definitions, body) => {
+                write!(f, "(let! (")?;
+                for (name, value) in definitions {
+                    write!(f, "({} {})", name, value)?;
+                }
+                write!(f, ") {})", body)
+            }
+            TermKind::Set(name, ast, value, is_macro) => {
+                write!(
+                    f,
+                    "(set! {} (vec! {} {} {}))",
+                    name,
+                    ast,
+                    value,
+                    match is_macro {
+                        IsMacro::Yes => "true",
+                        IsMacro::No => "nil",
+                    }
+                )
+            }
+            TermKind::Lambda(def, is_lifted) => {
+                write!(
+                    f,
+                    "(lambda{} (",
+                    match is_lifted {
+                        IsLifted::Yes => "!",
+                        IsLifted::No => "",
+                    }
+                )?;
+                if !def.parameters.is_empty() {
+                    write!(f, "{}", def.parameters[0])?;
+                    for parameter in &def.parameters[1..] {
+                        write!(f, " {}", parameter)?;
+                    }
+                }
+                write!(f, ") {})", def.body)
+            }
+            TermKind::Block(expressions) => {
+                write!(f, "(block! ")?;
+                for expression in expressions {
+                    write!(f, "{} ", expression)?;
+                }
+                write!(f, ")")
+            }
+            TermKind::Quote(expr) => write!(f, "(quote! {})", expr),
+            TermKind::If(scrutinee, then, else_) => {
+                write!(f, "(if! {} {} {})", scrutinee, then, else_)
+            }
+            TermKind::Operation(operation, args) => {
+                write!(f, "({} ", operation)?;
+                for arg in args {
+                    write!(f, "{} ", arg)?;
+                }
+                write!(f, ")")
+            }
+            TermKind::Call(function, args) => {
+                write!(f, "({}", function)?;
+                for arg in args {
+                    write!(f, " {}", arg)?;
+                }
+                write!(f, ")")
+            }
+            TermKind::Prim(prim) => write!(f, "{}", prim),
+        }
+    }
+}
+
 /// An [TermKind] with a range of positions in the source code. It's used in order to make better
 /// error messages.
 pub type Term<'a> = Spanned<TermKind<'a>>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Definition<'a> {
     pub is_variadic: bool,
     pub parameters: Vec<Symbol<'a>>,
-    pub body: Vec<Term<'a>>,
+    pub body: Box<Term<'a>>,
 }

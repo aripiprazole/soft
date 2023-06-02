@@ -7,6 +7,9 @@ use itertools::Itertools;
 
 use crate::{location::*, parser::syntax::*, specialize::tree::*};
 
+pub mod closure;
+pub mod free;
+pub mod substitute;
 pub mod tree;
 
 /// The specialization context. It's used to keep track of local definitions in order to optimize
@@ -163,7 +166,7 @@ impl<'a> Ctx<'a> {
 
     /// Specializes a lambda expression into a term
     pub fn specialize_lambda(&self, span: Span, args: Exprs<'a, '_>) -> Option<Term<'a>> {
-        if args.len() < 2 {
+        if args.len() != 2 {
             return None;
         }
 
@@ -189,7 +192,7 @@ impl<'a> Ctx<'a> {
         let def = Definition {
             is_variadic,
             parameters,
-            body: ctx.specialize_iter(&args[1..]),
+            body: Box::new(ctx.specialize(&args[1])),
         };
 
         Some(Term::new(span, TermKind::Lambda(def, IsLifted::No)))
