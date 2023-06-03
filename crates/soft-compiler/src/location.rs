@@ -49,3 +49,9 @@ impl From<Loc> for usize {
         loc.0
     }
 }
+
+impl<T> From<T> for Spanned<T> {
+    fn from(value: T) -> Self {
+        Spanned::new(Loc(0)..Loc(0), value)
+    }
+}

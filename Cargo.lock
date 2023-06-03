@@ -406,6 +406,7 @@ dependencies = [
  "fxhash",
  "im-rc",
  "itertools",
+ "soft-runtime",
  "thiserror",
 ]
 

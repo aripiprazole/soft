@@ -13,4 +13,5 @@ cranelift-native = "0.96.3"
 fxhash = "0.2.1"
 im-rc = "15.1.0"
 itertools = "0.10.5"
+soft-runtime = {path = "../soft-runtime"}
 thiserror = "1.0.40"
