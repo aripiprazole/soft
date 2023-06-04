@@ -12,9 +12,9 @@ cranelift-module = "0.96.3"
 cranelift-native = "0.96.3"
 fxhash = "0.2.1"
 im-rc = "15.1.0"
-inkwell = { version = "0.1.1", features = ["llvm15-0"] }
+inkwell = {git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm16-0"]}
 itertools = "0.10.5"
 libc = "0.2.139"
-llvm-sys = "150.0.7"
+llvm-sys = "160.1.0"
 soft-runtime = {path = "../soft-runtime"}
 thiserror = "1.0.40"

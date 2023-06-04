@@ -99,7 +99,7 @@ impl<'guard> DeclContext<'guard> {
 
     pub fn register(
         &mut self,
-        name: &str,
+        _name: &str,
         parameters: &[types::Type],
         return_type: types::Type,
     ) -> Signature {
@@ -111,7 +111,7 @@ impl<'guard> DeclContext<'guard> {
         sig
     }
 
-    pub fn call(&mut self, name: &str, args: &[Value]) -> Value {
+    pub fn call(&mut self, _name: &str, _args: &[Value]) -> Value {
         todo!()
     }
 

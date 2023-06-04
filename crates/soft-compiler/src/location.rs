@@ -19,6 +19,13 @@ pub struct Spanned<T> {
 }
 
 impl<T> Spanned<T> {
+    pub fn stub(data: T) -> Self {
+        Self {
+            data,
+            loc: Loc(0)..Loc(0),
+        }
+    }
+
     pub fn new(loc: Range<Loc>, data: T) -> Self {
         Self { data, loc }
     }

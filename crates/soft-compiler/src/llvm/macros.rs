@@ -3,22 +3,22 @@
 
 macro_rules! std_llvm_type {
     ($codegen:expr, void) => {
-        $codegen.context.void_type()
+        $codegen.ctx.void_type()
     };
     ($codegen:expr, ctx) => {
         $codegen
-            .context
+            .ctx
             .i8_type()
             .ptr_type(inkwell::AddressSpace::default())
     };
     ($codegen:expr, bool) => {
-        $codegen.context.bool_type()
+        $codegen.ctx.bool_type()
     };
     ($codegen:expr, u8) => {
-        $codegen.context.i8_type()
+        $codegen.ctx.i8_type()
     };
     ($codegen:expr, u64) => {
-        $codegen.context.i64_type()
+        $codegen.ctx.i64_type()
     };
     ($codegen:expr, $e:expr) => {
         $e
@@ -53,7 +53,7 @@ macro_rules! std_function {
             self.call_std(stringify!($name), &[])
         }
     };
-    ($name:ident(ctx, $($argsn:ident), + $(,)?) -> u64) => {
+    ($name:ident(ctx, $($argsn:ident), + $(,)?)) => {
         #[allow(clippy::needless_lifetimes)]
         #[allow(non_snake_case)]
         pub fn $name<'b>(&'b self, $($argsn: inkwell::values::BasicValueEnum<'b>),+) -> inkwell::values::BasicValueEnum<'b> {
@@ -61,27 +61,12 @@ macro_rules! std_function {
             self.call_std(stringify!($name), arguments)
         }
     };
-    ($name:ident(ctx) -> void) => {
-        #[allow(clippy::needless_lifetimes)]
-        #[allow(non_snake_case)]
-        pub fn $name<'b>(&'b self) -> inkwell::values::InstructionValue<'b> {
-            self.call_void_std(stringify!($name), &[])
-        }
-    };
-    ($name:ident(ctx, $($argsn:ident), + $(,)?) -> void) => {
-        #[allow(clippy::needless_lifetimes)]
-        #[allow(non_snake_case)]
-        pub fn $name<'b>(&'b self, $($argsn: inkwell::values::BasicValueEnum<'b>),+) -> inkwell::values::InstructionValue<'b> {
-            let arguments = &[$($argsn.into()),+];
-            self.call_void_std(stringify!($name), arguments)
-        }
-    };
-    ($name:ident($($argsn:ident), * $(,)?) -> u64) => {
+    ($name:ident($($argsn:ident), * $(,)?)) => {
         #[allow(clippy::needless_lifetimes)]
         #[allow(non_snake_case)]
         pub fn $name<'b>(&'b self, $($argsn: inkwell::values::BasicValueEnum<'b>),*) -> inkwell::values::BasicValueEnum<'b> {
             let arguments = &[$($argsn.into()),*];
-            self.call_direct(stringify!($name), arguments)
+            self.call(stringify!($name), arguments)
         }
     };
 }
