@@ -1,2 +1,1 @@
-mod ptr;
-mod tag;
+pub mod ptr;
