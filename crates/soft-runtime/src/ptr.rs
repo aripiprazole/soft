@@ -84,18 +84,18 @@ impl TaggedPtr {
     }
 
     /// Creates a new symbol tagged pointer.
-    pub fn symbol(symbol_ptr: SymbolNode) -> Self {
+    pub fn symbol(symbol: SymbolNode) -> Self {
         let mut result = Self {
-            symbol: NonNull::new(Box::leak(Box::new(symbol_ptr)) as *mut SymbolNode).unwrap(),
+            symbol: NonNull::new(Box::leak(Box::new(symbol)) as *mut SymbolNode).unwrap(),
         };
         unsafe { result.tag |= PtrTag::Symbol as usize };
         result
     }
 
     /// Creates a new pair tagged pointer.
-    pub fn pair(pair_ptr: PairNode) -> Self {
+    pub fn pair(pair: PairNode) -> Self {
         let mut result = Self {
-            pair: NonNull::new(Box::leak(Box::new(pair_ptr)) as *mut PairNode).unwrap(),
+            pair: NonNull::new(Box::leak(Box::new(pair)) as *mut PairNode).unwrap(),
         };
         unsafe { result.tag |= PtrTag::Pair as usize };
         result
@@ -130,12 +130,11 @@ impl Display for Value {
         match self {
             Value::Number(n) => write!(f, "{}", n),
             Value::Symbol(s) => write!(f, ":{}", unsafe { s.as_ref().data }),
-            Value::Pair(p) => write!(
-                f,
-                "({} . {})",
-                unsafe { Value::from(p.as_ref().head) },
-                unsafe { Value::from(p.as_ref().tail) }
-            ),
+            Value::Pair(p) => unsafe {
+                let head = Value::from(p.as_ref().head);
+                let tail = Value::from(p.as_ref().tail);
+                write!(f, "({} . {})", head, tail)
+            },
             Value::Object(obj) => match unsafe { obj.as_ref() } {
                 ObjectNode::Vector(v) => {
                     write!(f, "#(")?;
