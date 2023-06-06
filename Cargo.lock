@@ -550,6 +550,9 @@ dependencies = [
 [[package]]
 name = "soft-runtime"
 version = "0.1.0"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "stable_deref_trait"

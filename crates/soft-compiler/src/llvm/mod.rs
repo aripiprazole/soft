@@ -72,9 +72,10 @@ mod tests {
         codegen.initialize_std_functions();
         let main = codegen.main("main", Term::stub(TermKind::Number(10)));
 
+        println!("{}", codegen.module.print_to_string().to_string_lossy());
+
         // Verify the LLVM module integrity
         codegen.module.verify().unwrap_or_else(|err| {
-            println!("{}", codegen.module.print_to_string().to_string_lossy());
             panic!("Module is broken: {}", err.to_string_lossy());
         });
 
