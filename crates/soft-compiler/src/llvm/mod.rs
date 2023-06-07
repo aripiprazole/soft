@@ -60,19 +60,29 @@ impl<'guard> Codegen<'guard> {
 #[cfg(test)]
 mod tests {
     use inkwell::{context::Context, OptimizationLevel};
-    use soft_runtime::{internal::prim__new_u61, ptr::TaggedPtr};
+    use soft_runtime::internal::*;
+    use soft_runtime::ptr::TaggedPtr;
 
-    use crate::specialize::tree::{Term, TermKind};
+    use crate::specialize::tree::TermKind;
 
     use super::macros;
     use super::Codegen;
 
     #[test]
     fn it_works() {
+        use crate::specialize::tree::OperationKind::*;
+
         let context = Context::create();
         let mut codegen = Codegen::new(&context);
         codegen.initialize_std_functions();
-        let main = codegen.main("main", Term::stub(TermKind::Number(10)));
+        let main = codegen.main(
+            "main",
+            TermKind::Operation(
+                Add,
+                vec![TermKind::Number(10).into(), TermKind::Number(30).into()],
+            )
+            .into(),
+        );
 
         println!("{}", codegen.module.print_to_string().to_string_lossy());
 
@@ -86,7 +96,22 @@ mod tests {
             .create_jit_execution_engine(OptimizationLevel::None)
             .expect("Could not create execution engine");
 
-        macros::register_jit_function!(codegen, engine, [prim__new_u61]);
+        macros::register_jit_function!(
+            codegen,
+            engine,
+            [
+                prim__new_u61,
+                prim__add_tagged,
+                prim__sub_tagged,
+                prim__mul_tagged,
+                prim__mod_tagged,
+                prim__shl_tagged,
+                prim__shr_tagged,
+                prim__and_tagged,
+                prim__xor_tagged,
+                prim__or_tagged,
+            ]
+        );
 
         unsafe {
             let f = engine

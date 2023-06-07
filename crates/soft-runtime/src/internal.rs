@@ -6,10 +6,66 @@ pub extern "C" fn prim__new_u61(value: u64) -> TaggedPtr {
 }
 
 #[no_mangle]
-pub extern "C" fn prim__add_tagged(left: TaggedPtr, right: TaggedPtr) -> TaggedPtr {
-    let num = left.assert().number();
-    let num1 = right.assert().number();
-    TaggedPtr::new_number(num + num1)
+pub extern "C" fn prim__add_tagged(lhs: TaggedPtr, rhs: TaggedPtr) -> TaggedPtr {
+    let lhs = lhs.assert().number();
+    let rhs = rhs.assert().number();
+    TaggedPtr::new_number(lhs + rhs)
+}
+
+#[no_mangle]
+pub extern "C" fn prim__sub_tagged(lhs: TaggedPtr, rhs: TaggedPtr) -> TaggedPtr {
+    let lhs = lhs.assert().number();
+    let rhs = rhs.assert().number();
+    TaggedPtr::new_number(lhs - rhs)
+}
+
+#[no_mangle]
+pub extern "C" fn prim__mul_tagged(lhs: TaggedPtr, rhs: TaggedPtr) -> TaggedPtr {
+    let lhs = lhs.assert().number();
+    let rhs = rhs.assert().number();
+    TaggedPtr::new_number(lhs * rhs)
+}
+
+#[no_mangle]
+pub extern "C" fn prim__mod_tagged(lhs: TaggedPtr, rhs: TaggedPtr) -> TaggedPtr {
+    let lhs = lhs.assert().number();
+    let rhs = rhs.assert().number();
+    TaggedPtr::new_number(lhs % rhs)
+}
+
+#[no_mangle]
+pub extern "C" fn prim__shl_tagged(lhs: TaggedPtr, rhs: TaggedPtr) -> TaggedPtr {
+    let lhs = lhs.assert().number();
+    let rhs = rhs.assert().number();
+    TaggedPtr::new_number(lhs << rhs)
+}
+
+#[no_mangle]
+pub extern "C" fn prim__shr_tagged(lhs: TaggedPtr, rhs: TaggedPtr) -> TaggedPtr {
+    let lhs = lhs.assert().number();
+    let rhs = rhs.assert().number();
+    TaggedPtr::new_number(lhs >> rhs)
+}
+
+#[no_mangle]
+pub extern "C" fn prim__and_tagged(lhs: TaggedPtr, rhs: TaggedPtr) -> TaggedPtr {
+    let lhs = lhs.assert().number();
+    let rhs = rhs.assert().number();
+    TaggedPtr::new_number(lhs & rhs)
+}
+
+#[no_mangle]
+pub extern "C" fn prim__or_tagged(lhs: TaggedPtr, rhs: TaggedPtr) -> TaggedPtr {
+    let lhs = lhs.assert().number();
+    let rhs = rhs.assert().number();
+    TaggedPtr::new_number(lhs | rhs)
+}
+
+#[no_mangle]
+pub extern "C" fn prim__xor_tagged(lhs: TaggedPtr, rhs: TaggedPtr) -> TaggedPtr {
+    let lhs = lhs.assert().number();
+    let rhs = rhs.assert().number();
+    TaggedPtr::new_number(lhs ^ rhs)
 }
 
 #[cfg(test)]

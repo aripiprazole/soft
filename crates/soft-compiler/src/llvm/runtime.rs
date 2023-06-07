@@ -13,11 +13,29 @@ impl<'guard> Codegen<'guard> {
     /// registers into the LLVM context.
     pub fn initialize_std_functions(&self) {
         macros::build_std_functions!(self, {
-            prim__new_u61(u64) -> u64
+            prim__new_u61(u64) -> u64,
+            prim__add_tagged(u64, u64) -> u64,
+            prim__sub_tagged(u64, u64) -> u64,
+            prim__mul_tagged(u64, u64) -> u64,
+            prim__mod_tagged(u64, u64) -> u64,
+            prim__shl_tagged(u64, u64) -> u64,
+            prim__shr_tagged(u64, u64) -> u64,
+            prim__and_tagged(u64, u64) -> u64,
+            prim__xor_tagged(u64, u64) -> u64,
+            prim__or_tagged(u64, u64) -> u64,
         });
     }
 
     std_function!(prim__new_u61(value));
+    std_function!(prim__add_tagged(lhs, rhs));
+    std_function!(prim__sub_tagged(lhs, rhs));
+    std_function!(prim__mul_tagged(lhs, rhs));
+    std_function!(prim__mod_tagged(lhs, rhs));
+    std_function!(prim__shl_tagged(lhs, rhs));
+    std_function!(prim__shr_tagged(lhs, rhs));
+    std_function!(prim__and_tagged(lhs, rhs));
+    std_function!(prim__xor_tagged(lhs, rhs));
+    std_function!(prim__or_tagged(lhs, rhs));
 
     /// Call a function from the Soft runtime, that passes the context as the first argument.
     /// This is used for functions that are not part of the MIR, but are part of the runtime.

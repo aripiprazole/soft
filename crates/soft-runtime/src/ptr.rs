@@ -65,6 +65,78 @@ impl std::ops::Add<U61> for U61 {
     }
 }
 
+impl std::ops::Sub<U61> for U61 {
+    type Output = U61;
+
+    #[inline(always)]
+    fn sub(self, rhs: U61) -> Self::Output {
+        U61(self.0 - rhs.0)
+    }
+}
+
+impl std::ops::Mul<U61> for U61 {
+    type Output = U61;
+
+    #[inline(always)]
+    fn mul(self, rhs: U61) -> Self::Output {
+        U61(self.0 * rhs.0)
+    }
+}
+
+impl std::ops::Rem<U61> for U61 {
+    type Output = U61;
+
+    #[inline(always)]
+    fn rem(self, rhs: U61) -> Self::Output {
+        U61(self.0 % rhs.0)
+    }
+}
+
+impl std::ops::Shl<U61> for U61 {
+    type Output = U61;
+
+    #[inline(always)]
+    fn shl(self, rhs: U61) -> Self::Output {
+        U61(self.0 << rhs.0)
+    }
+}
+
+impl std::ops::Shr<U61> for U61 {
+    type Output = U61;
+
+    #[inline(always)]
+    fn shr(self, rhs: U61) -> Self::Output {
+        U61(self.0 >> rhs.0)
+    }
+}
+
+impl std::ops::BitAnd<U61> for U61 {
+    type Output = U61;
+
+    #[inline(always)]
+    fn bitand(self, rhs: U61) -> Self::Output {
+        U61(self.0 & rhs.0)
+    }
+}
+
+impl std::ops::BitOr<U61> for U61 {
+    type Output = U61;
+
+    #[inline(always)]
+    fn bitor(self, rhs: U61) -> Self::Output {
+        U61(self.0 | rhs.0)
+    }
+}
+
+impl std::ops::BitXor<U61> for U61 {
+    type Output = U61;
+
+    #[inline(always)]
+    fn bitxor(self, rhs: U61) -> Self::Output {
+        U61(self.0 ^ rhs.0)
+    }
+}
+
 impl std::fmt::Display for U61 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}u61", self.0 >> 3)
