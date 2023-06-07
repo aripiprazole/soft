@@ -77,11 +77,7 @@ mod tests {
         codegen.initialize_std_functions();
         let main = codegen.main(
             "main",
-            TermKind::Operation(
-                Add,
-                vec![TermKind::Number(10).into(), TermKind::Number(30).into()],
-            )
-            .into(),
+            TermKind::Operation(Add, vec![TermKind::Number(10).into()]).into(),
         );
 
         println!("{}", codegen.module.print_to_string().to_string_lossy());
@@ -110,6 +106,8 @@ mod tests {
                 prim__and_tagged,
                 prim__xor_tagged,
                 prim__or_tagged,
+                prim__nil,
+                soft_panic,
             ]
         );
 

@@ -20,6 +20,12 @@ macro_rules! std_llvm_type {
     ($codegen:expr, u64) => {
         $codegen.ctx.i64_type()
     };
+    ($codegen:expr, str) => {
+        $codegen
+            .ctx
+            .i8_type()
+            .ptr_type(inkwell::AddressSpace::default())
+    };
     ($codegen:expr, $e:expr) => {
         $e
     };

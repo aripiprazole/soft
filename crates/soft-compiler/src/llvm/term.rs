@@ -1,4 +1,6 @@
+use inkwell::values::BasicValue;
 use inkwell::values::BasicValueEnum;
+use inkwell::values::InstructionValue;
 
 use crate::specialize::tree::OperationKind;
 use crate::specialize::tree::Term;
@@ -51,7 +53,6 @@ impl<'guard> Codegen<'guard> {
                 And => self.prim__and_tagged(acc, next),
                 Xor => self.prim__xor_tagged(acc, next),
                 Or => self.prim__or_tagged(acc, next),
-                Not => todo!(),
                 Eql => todo!(),
                 Neq => todo!(),
                 Gtn => todo!(),
@@ -60,6 +61,7 @@ impl<'guard> Codegen<'guard> {
                 Lte => todo!(),
                 LAnd => todo!(),
                 LOr => todo!(),
+                _ => self.binary_will_fail(kind),
             }
         })
     }
@@ -69,25 +71,27 @@ impl<'guard> Codegen<'guard> {
         // let operand = operands.first().unwrap();
 
         match kind {
-            Add => todo!(),
             Sub => todo!(),
-            Mul => todo!(),
-            Div => todo!(),
-            Mod => todo!(),
-            Shl => todo!(),
-            Shr => todo!(),
-            And => todo!(),
-            Xor => todo!(),
-            Or => todo!(),
             Not => todo!(),
-            Eql => todo!(),
-            Neq => todo!(),
-            Gtn => todo!(),
-            Gte => todo!(),
-            Ltn => todo!(),
-            Lte => todo!(),
-            LAnd => todo!(),
-            LOr => todo!(),
+            _ => self.unary_will_fail(kind),
         }
+    }
+
+    fn unary_will_fail(&mut self, kind: OperationKind) -> BasicValueEnum<'guard> {
+        let message = format!("The operation {kind} will fail if executed as unary.");
+        let message = self
+            .builder
+            .build_global_string_ptr(&message, "unary.panic");
+        self.soft_panic(message.as_pointer_value().as_basic_value_enum());
+        self.prim__nil()
+    }
+
+    fn binary_will_fail(&mut self, kind: OperationKind) -> BasicValueEnum<'guard> {
+        let message = format!("The operation {kind} will fail if executed as binary.");
+        let message = self
+            .builder
+            .build_global_string_ptr(&message, "unary.panic");
+        self.soft_panic(message.as_pointer_value().as_basic_value_enum());
+        self.prim__nil()
     }
 }

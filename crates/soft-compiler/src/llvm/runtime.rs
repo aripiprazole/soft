@@ -23,6 +23,8 @@ impl<'guard> Codegen<'guard> {
             prim__and_tagged(u64, u64) -> u64,
             prim__xor_tagged(u64, u64) -> u64,
             prim__or_tagged(u64, u64) -> u64,
+            prim__nil() -> u64,
+            soft_panic(str) -> u64,
         });
     }
 
@@ -36,6 +38,8 @@ impl<'guard> Codegen<'guard> {
     std_function!(prim__and_tagged(lhs, rhs));
     std_function!(prim__xor_tagged(lhs, rhs));
     std_function!(prim__or_tagged(lhs, rhs));
+    std_function!(prim__nil());
+    std_function!(soft_panic(message));
 
     /// Call a function from the Soft runtime, that passes the context as the first argument.
     /// This is used for functions that are not part of the MIR, but are part of the runtime.

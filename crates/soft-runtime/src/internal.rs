@@ -1,4 +1,11 @@
+use std::ffi::CStr;
+
 use crate::ptr::TaggedPtr;
+
+#[no_mangle]
+pub extern "C" fn prim__nil() -> TaggedPtr {
+    TaggedPtr::new_number(0)
+}
 
 #[no_mangle]
 pub extern "C" fn prim__new_u61(value: u64) -> TaggedPtr {
@@ -66,6 +73,14 @@ pub extern "C" fn prim__xor_tagged(lhs: TaggedPtr, rhs: TaggedPtr) -> TaggedPtr 
     let lhs = lhs.assert().number();
     let rhs = rhs.assert().number();
     TaggedPtr::new_number(lhs ^ rhs)
+}
+
+#[no_mangle]
+pub extern "C" fn soft_panic(message: *mut libc::c_void) -> TaggedPtr {
+    unsafe {
+        let message = CStr::from_ptr(message as *mut _).to_string_lossy();
+        panic!("[SOFT] Panic: {message}");
+    }
 }
 
 #[cfg(test)]
