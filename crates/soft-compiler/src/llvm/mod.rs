@@ -3,8 +3,12 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::debug_info::{AsDIScope, DWARFEmissionKind, DWARFSourceLanguage};
 use inkwell::module::Module;
-use inkwell::values::BasicValueEnum;
-use llvm_sys::debuginfo::{LLVMDIFlagPrototyped, LLVMDIFlagPublic};
+use inkwell::values::{AsValueRef, BasicValueEnum, FunctionValue};
+use llvm_sys::core::*;
+use llvm_sys::debuginfo::LLVMDIFlagPrototyped;
+use llvm_sys::prelude::*;
+use llvm_sys::transforms::instcombine::LLVMAddInstructionCombiningPass;
+use llvm_sys::transforms::scalar::*;
 
 use crate::specialize::tree::Term;
 
@@ -19,6 +23,7 @@ pub struct Codegen<'guard> {
     pub ctx: &'guard Context,
     pub module: Module<'guard>,
     pub builder: Builder<'guard>,
+    pub fpm: LLVMPassManagerRef,
 
     //>>>Contextual stuff
     pub di: DIContext<'guard>,
@@ -34,6 +39,7 @@ pub struct Codegen<'guard> {
 impl<'guard> Codegen<'guard> {
     pub fn new(ctx: &'guard Context) -> Self {
         let module = ctx.create_module("SOFT");
+        let fpm = Self::create_fpm(module.as_mut_ptr());
 
         let (dibuilder, dicu) = module.create_debug_info_builder(
             true,
@@ -55,6 +61,7 @@ impl<'guard> Codegen<'guard> {
 
         Codegen {
             ctx,
+            fpm,
             di: DIContext::new(dibuilder, dicu),
             module,
             builder: ctx.create_builder(),
@@ -89,18 +96,38 @@ impl<'guard> Codegen<'guard> {
         self.builder.position_at_end(entry);
         self.bb = Some(entry);
 
-        // self.di.builder.create_debug_location(
-        //     self.ctx,
-        //     0,
-        //     10,
-        //     difunction.as_debug_info_scope(),
-        //     None,
-        // );
+        let location = self.di.builder.create_debug_location(
+            self.ctx,
+            0,
+            10,
+            difunction.as_debug_info_scope(),
+            None,
+        );
+        self.builder.set_current_debug_location(location);
 
         let value = self.term(term);
         self.builder.build_return(Some(&value));
+        self.run_passes(fun);
 
         name
+    }
+
+    fn run_passes(&self, f: FunctionValue) {
+        unsafe {
+            LLVMRunFunctionPassManager(self.fpm, f.as_value_ref());
+        }
+    }
+
+    fn create_fpm(module: LLVMModuleRef) -> LLVMPassManagerRef {
+        unsafe {
+            let fpm = LLVMCreateFunctionPassManagerForModule(module);
+            LLVMAddInstructionCombiningPass(fpm);
+            LLVMAddReassociatePass(fpm);
+            LLVMAddGVNPass(fpm);
+            LLVMAddCFGSimplificationPass(fpm);
+            LLVMInitializeFunctionPassManager(fpm);
+            fpm
+        }
     }
 
     fn create_name(&mut self, name: &str) -> String {
