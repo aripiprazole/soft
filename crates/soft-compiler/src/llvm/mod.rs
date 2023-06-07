@@ -6,6 +6,9 @@ use inkwell::values::BasicValueEnum;
 
 use crate::specialize::tree::Term;
 
+use self::di::DIContext;
+
+pub mod di;
 pub(crate) mod macros;
 pub mod runtime;
 pub mod term;
@@ -16,6 +19,8 @@ pub struct Codegen<'guard> {
     pub builder: Builder<'guard>,
 
     //>>>Contextual stuff
+    pub di: DIContext<'guard>,
+
     /// The current function let bound names
     pub names: FxHashMap<String, BasicValueEnum<'guard>>,
 
@@ -26,9 +31,30 @@ pub struct Codegen<'guard> {
 
 impl<'guard> Codegen<'guard> {
     pub fn new(ctx: &'guard Context) -> Self {
+        let module = ctx.create_module("SOFT");
+
+        let (dibuilder, dicu) = module.create_debug_info_builder(
+            true,
+            /* language */ inkwell::debug_info::DWARFSourceLanguage::C,
+            /* filename */ "awa.",
+            /* directory */ ".",
+            /* producer */ "Soft",
+            /* is_optimized */ false,
+            /* compiler command line flags */ "",
+            /* runtime_ver */ 0,
+            /* split_name */ "",
+            /* kind */ inkwell::debug_info::DWARFEmissionKind::Full,
+            /* dwo_id */ 0,
+            /* split_debug_inling */ false,
+            /* debug_info_for_profiling */ false,
+            "/",
+            "/",
+        );
+
         Codegen {
             ctx,
-            module: ctx.create_module("SOFT"),
+            di: DIContext::new(dibuilder, dicu),
+            module,
             builder: ctx.create_builder(),
             names: Default::default(),
             bb: None,
