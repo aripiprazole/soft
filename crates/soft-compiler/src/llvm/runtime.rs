@@ -17,6 +17,7 @@ impl<'guard> Codegen<'guard> {
     pub fn initialize_std_functions(&self) {
         macros::build_std_functions!(self, {
             prim__new_u61(u64) -> u64,
+            prim__function(ptr) -> u64,
             prim__add_tagged(u64, u64) -> u64,
             prim__sub_tagged(u64, u64) -> u64,
             prim__mul_tagged(u64, u64) -> u64,
@@ -37,6 +38,7 @@ impl<'guard> Codegen<'guard> {
             engine,
             [
                 prim__new_u61,
+                prim__function,
                 prim__add_tagged,
                 prim__sub_tagged,
                 prim__mul_tagged,
@@ -53,6 +55,7 @@ impl<'guard> Codegen<'guard> {
     }
 
     std_function!(prim__new_u61(value));
+    std_function!(prim__function(value));
     std_function!(prim__add_tagged(lhs, rhs));
     std_function!(prim__sub_tagged(lhs, rhs));
     std_function!(prim__mul_tagged(lhs, rhs));

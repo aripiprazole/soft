@@ -1,11 +1,11 @@
 #![allow(unused_imports)]
 #![allow(unused_macros)]
 
-macro_rules! std_llvm_type {
+macro_rules! llvm_type {
     ($codegen:expr, void) => {
         $codegen.ctx.void_type()
     };
-    ($codegen:expr, ctx) => {
+    ($codegen:expr, ptr) => {
         $codegen
             .ctx
             .i8_type()
@@ -37,8 +37,8 @@ macro_rules! build_std_functions {
             let f = $codegen.module.get_function(stringify!($name));
             if f.is_none() {
                 let name = stringify!($name);
-                let ret = $crate::llvm::macros::std_llvm_type!($codegen, $ret);
-                let args = &[$($crate::llvm::macros::std_llvm_type!($codegen, $x).into()),*];
+                let ret = $crate::llvm::macros::llvm_type!($codegen, $ret);
+                let args = &[$($crate::llvm::macros::llvm_type!($codegen, $x).into()),*];
                 $codegen.module.add_function(name, ret.fn_type(args, false), None);
             }
         })+
@@ -66,6 +66,6 @@ macro_rules! std_function {
 }
 
 pub(crate) use build_std_functions;
+pub(crate) use llvm_type;
 pub(crate) use register_jit_function;
 pub(crate) use std_function;
-pub(crate) use std_llvm_type;

@@ -1,10 +1,18 @@
 use std::ffi::CStr;
 
-use crate::ptr::TaggedPtr;
+use crate::ptr::{Function, TaggedPtr};
 
 #[no_mangle]
 pub extern "C" fn prim__nil() -> TaggedPtr {
     TaggedPtr::new_number(0)
+}
+
+#[no_mangle]
+pub extern "C" fn prim__function(value: u64) -> TaggedPtr {
+    TaggedPtr::alloc(Function {
+        ptr: value as *mut _,
+        vec: vec![],
+    })
 }
 
 #[no_mangle]

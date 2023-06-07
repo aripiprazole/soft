@@ -155,7 +155,7 @@ mod tests {
         let mut codegen = Codegen::new(&context);
         codegen.initialize_std_functions();
 
-        let code = parse("(+ 10 1)").unwrap();
+        let code = parse("(lambda () 42)").unwrap();
         let mut code = specialize(code.first().unwrap().clone());
         code.closure_convert();
 
@@ -182,7 +182,7 @@ mod tests {
                 .get_function::<unsafe extern "C" fn() -> TaggedPtr>(&main)
                 .unwrap_or_else(|_| panic!("Could not find the main function: {main}"));
 
-            println!("f.call() = {}", f.call().assert().number());
+            println!("f.call() = {:?}", f.call().tag());
         }
     }
 }

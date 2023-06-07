@@ -1,10 +1,12 @@
 use inkwell::values::BasicValue;
 use inkwell::values::BasicValueEnum;
 
+use crate::specialize::tree::Definition;
 use crate::specialize::tree::OperationKind;
 use crate::specialize::tree::Term;
 use crate::specialize::tree::TermKind::*;
 
+use super::macros::llvm_type;
 use super::Codegen;
 
 impl<'guard> Codegen<'guard> {
@@ -17,11 +19,12 @@ impl<'guard> Codegen<'guard> {
                 self.prim__new_u61(value)
             }
             String(_) => todo!(),
-            Bool(_) => todo!(),
+            Bool(true) => todo!(),
+            Bool(false) => todo!(),
             Variable(_) => todo!(),
             Let(_, _) => todo!(),
             Set(_, _, _, _) => todo!(),
-            Lambda(_, _) => todo!(),
+            Lambda(definition, _) => self.lambda(definition),
             Block(_) => todo!(),
             Quote(_) => todo!(),
             If(_, _, _) => todo!(),
@@ -31,6 +34,41 @@ impl<'guard> Codegen<'guard> {
             Call(_, _) => todo!(),
             Prim(_) => todo!(),
         }
+    }
+
+    fn lambda(&mut self, definition: Definition) -> BasicValueEnum<'guard> {
+        let prev = self.bb.unwrap();
+
+        // TODO: handle varargs
+        let params = vec![self.ctx.i64_type().into(); definition.parameters.len()];
+        let ty = self.ctx.i64_type().fn_type(&params, false);
+
+        // TODO: handle parameters, add to the ctx
+        let lambda = self.module.add_function("<closure>", ty, None);
+        for (i, param) in lambda.get_params().iter().enumerate() {
+            // SAFETY: The [`params`] variable has the size [`definition.parameters`]
+            let symbol = unsafe { definition.parameters.get_unchecked(i) };
+
+            // Set name of the parameter for debug porpuses
+            param.set_name(symbol.name())
+        }
+
+        let bb = self.ctx.append_basic_block(lambda, "entry");
+        self.builder.position_at_end(bb);
+
+        let value = self.term(*definition.body);
+        self.builder.build_return(Some(&value));
+        self.run_passes(lambda);
+
+        // Return at the old/previous position, before generating code with this definition
+        self.builder.position_at_end(prev);
+
+        // Get the function pointer as the new function
+        let ty = llvm_type!(self, ptr);
+        let lambda = lambda.as_global_value().as_pointer_value();
+        let lambda = self.builder.build_pointer_cast(lambda, ty, "");
+
+        self.prim__function(lambda.as_basic_value_enum())
     }
 
     fn binary(&mut self, kind: OperationKind, mut operands: Vec<Term>) -> BasicValueEnum<'guard> {
