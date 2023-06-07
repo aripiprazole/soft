@@ -12,9 +12,9 @@ use soft_compiler::specialize::closure::ClosureConvert;
 use soft_compiler::{parser::parse, specialize::specialize};
 
 fn main() {
-    /// The CLI only takes one expression and then executes it. The first thing that you're going to
-    /// use is probably an injection of a function that will be used to start the program.
-    match env::args().collect().as_slice() {
+    // The CLI only takes one expression and then executes it. The first thing that you're going to
+    // use is probably an injection of a function that will be used to start the program.
+    match env::args().collect::<Vec<_>>().as_slice() {
         [_cwd, code] => {
             let parsed = parse(code).unwrap();
             let mut specialized = specialize(parsed[0].clone());

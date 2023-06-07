@@ -5,7 +5,7 @@ use cranelift::prelude::{isa::TargetIsa, *};
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{Linkage, Module};
 use fxhash::FxHashMap;
-use soft_runtime::FatPtr;
+use soft_runtime::ptr::FatPtr;
 
 pub struct Codegen<'src> {
     /// Holds all the names used in the current context. To be easier to split code in further steps
