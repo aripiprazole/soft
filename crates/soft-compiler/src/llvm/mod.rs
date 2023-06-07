@@ -140,21 +140,26 @@ impl<'guard> Codegen<'guard> {
 #[cfg(test)]
 mod tests {
     use inkwell::{context::Context, OptimizationLevel};
-    use soft_runtime::internal::*;
     use soft_runtime::ptr::TaggedPtr;
 
-    use super::macros;
+    use crate::{
+        parser::parse,
+        specialize::{closure::ClosureConvert, specialize},
+    };
+
     use super::Codegen;
 
     #[test]
     fn it_works() {
-        use crate::specialize::tree::OperationKind::*;
-        use crate::specialize::tree::TermKind::*;
-
         let context = Context::create();
         let mut codegen = Codegen::new(&context);
         codegen.initialize_std_functions();
-        let main = codegen.main("main", Operation(Add, vec![Number(3).into()]).into());
+
+        let code = parse("(+ 10 1)").unwrap();
+        let mut code = specialize(code.first().unwrap().clone());
+        code.closure_convert();
+
+        let main = codegen.main("main", code);
 
         codegen.di.builder.finalize();
 
@@ -167,27 +172,10 @@ mod tests {
 
         let engine = codegen
             .module
-            .create_jit_execution_engine(OptimizationLevel::None)
+            .create_jit_execution_engine(OptimizationLevel::Aggressive)
             .expect("Could not create execution engine");
 
-        macros::register_jit_function!(
-            codegen,
-            engine,
-            [
-                prim__new_u61,
-                prim__add_tagged,
-                prim__sub_tagged,
-                prim__mul_tagged,
-                prim__mod_tagged,
-                prim__shl_tagged,
-                prim__shr_tagged,
-                prim__and_tagged,
-                prim__xor_tagged,
-                prim__or_tagged,
-                prim__nil,
-                soft_panic,
-            ]
-        );
+        codegen.initialize_jit_functions(&engine);
 
         unsafe {
             let f = engine
