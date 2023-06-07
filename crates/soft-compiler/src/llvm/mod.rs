@@ -1,8 +1,10 @@
 use fxhash::FxHashMap;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
+use inkwell::debug_info::{AsDIScope, DWARFEmissionKind, DWARFSourceLanguage};
 use inkwell::module::Module;
 use inkwell::values::BasicValueEnum;
+use llvm_sys::debuginfo::{LLVMDIFlagPrototyped, LLVMDIFlagPublic};
 
 use crate::specialize::tree::Term;
 
@@ -35,15 +37,15 @@ impl<'guard> Codegen<'guard> {
 
         let (dibuilder, dicu) = module.create_debug_info_builder(
             true,
-            /* language */ inkwell::debug_info::DWARFSourceLanguage::C,
-            /* filename */ "awa.",
+            /* language */ DWARFSourceLanguage::C,
+            /* filename */ "awa.soft",
             /* directory */ ".",
             /* producer */ "Soft",
             /* is_optimized */ false,
             /* compiler command line flags */ "",
             /* runtime_ver */ 0,
             /* split_name */ "",
-            /* kind */ inkwell::debug_info::DWARFEmissionKind::Full,
+            /* kind */ DWARFEmissionKind::Full,
             /* dwo_id */ 0,
             /* split_debug_inling */ false,
             /* debug_info_for_profiling */ false,
@@ -66,9 +68,34 @@ impl<'guard> Codegen<'guard> {
         let name = self.create_name(name);
         let fun = self.module.add_function(&name, fun_type, None);
 
+        let difile = self.di.builder.create_file("main.soft", "src");
+        let difunction = self.di.create_function_type(0, difile);
+        let difunction = self.di.builder.create_function(
+            /* scope */ self.di.cu.as_debug_info_scope(),
+            /* func name */ "main",
+            /* linkage_name */ None,
+            /* file */ self.di.cu.get_file(),
+            /* line_no */ 10,
+            /* DIType */ difunction,
+            /* is_local_to_unit */ false,
+            /* is_definition */ true,
+            /* scope_line */ 10,
+            /* flags */ LLVMDIFlagPrototyped,
+            /* is_optimized */ false,
+        );
+        fun.set_subprogram(difunction);
+
         let entry = self.ctx.append_basic_block(fun, "entry");
         self.builder.position_at_end(entry);
         self.bb = Some(entry);
+
+        // self.di.builder.create_debug_location(
+        //     self.ctx,
+        //     0,
+        //     10,
+        //     difunction.as_debug_info_scope(),
+        //     None,
+        // );
 
         let value = self.term(term);
         self.builder.build_return(Some(&value));
@@ -89,22 +116,20 @@ mod tests {
     use soft_runtime::internal::*;
     use soft_runtime::ptr::TaggedPtr;
 
-    use crate::specialize::tree::TermKind;
-
     use super::macros;
     use super::Codegen;
 
     #[test]
     fn it_works() {
         use crate::specialize::tree::OperationKind::*;
+        use crate::specialize::tree::TermKind::*;
 
         let context = Context::create();
         let mut codegen = Codegen::new(&context);
         codegen.initialize_std_functions();
-        let main = codegen.main(
-            "main",
-            TermKind::Operation(Add, vec![TermKind::Number(10).into()]).into(),
-        );
+        let main = codegen.main("main", Operation(Add, vec![Number(3).into()]).into());
+
+        codegen.di.builder.finalize();
 
         println!("{}", codegen.module.print_to_string().to_string_lossy());
 
