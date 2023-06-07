@@ -9,7 +9,11 @@ impl<'guard> Codegen<'guard> {
     pub fn term(&mut self, term: Term) -> BasicValueEnum<'guard> {
         match term.data {
             Atom(_) => todo!(),
-            Number(_) => self.ctx.i64_type().const_int(10, false).into(),
+            Number(value) => {
+                let value = self.ctx.i64_type().const_int(value, false).into();
+
+                self.prim__new_u61(value)
+            }
             String(_) => todo!(),
             Bool(_) => todo!(),
             Variable(_) => todo!(),

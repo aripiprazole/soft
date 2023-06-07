@@ -60,9 +60,11 @@ impl<'guard> Codegen<'guard> {
 #[cfg(test)]
 mod tests {
     use inkwell::{context::Context, OptimizationLevel};
+    use soft_runtime::{internal::prim__new_u61, ptr::TaggedPtr};
 
     use crate::specialize::tree::{Term, TermKind};
 
+    use super::macros;
     use super::Codegen;
 
     #[test]
@@ -81,15 +83,17 @@ mod tests {
 
         let engine = codegen
             .module
-            .create_jit_execution_engine(OptimizationLevel::Aggressive)
+            .create_jit_execution_engine(OptimizationLevel::None)
             .expect("Could not create execution engine");
+
+        macros::register_jit_function!(codegen, engine, [prim__new_u61]);
 
         unsafe {
             let f = engine
-                .get_function::<unsafe extern "C" fn() -> u64>(&main)
+                .get_function::<unsafe extern "C" fn() -> TaggedPtr>(&main)
                 .unwrap_or_else(|_| panic!("Could not find the main function: {main}"));
 
-            println!("f.call() = {}", f.call());
+            println!("f.call() = {}", f.call().assert().number());
         }
     }
 }

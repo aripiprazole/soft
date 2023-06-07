@@ -28,7 +28,8 @@ macro_rules! std_llvm_type {
 macro_rules! build_std_functions {
     ($codegen:expr, {$($name:ident($($x:tt),* $(,)?) -> $ret:tt),+ $(,)?}) => {{
         $({
-            if $codegen.module.get_function(stringify!($name)).is_none() {
+            let f = $codegen.module.get_function(stringify!($name));
+            if f.is_none() {
                 let name = stringify!($name);
                 let ret = $crate::llvm::macros::std_llvm_type!($codegen, $ret);
                 let args = &[$($crate::llvm::macros::std_llvm_type!($codegen, $x).into()),*];
@@ -39,32 +40,19 @@ macro_rules! build_std_functions {
 }
 
 macro_rules! register_jit_function {
-    ($codegen:expr, $engine:expr, $name:expr) => {{
-        let fun = $codegen.module.get_function(stringify!($name)).unwrap();
-        $engine.add_global_mapping(&fun, $name as usize);
-    }};
+    ($codegen:expr, $engine:expr, [$($name:expr),* $(,)?]) => {
+        $({
+            let f = $codegen.module.get_function(stringify!($name)).unwrap();
+            $engine.add_global_mapping(&f, $name as *mut libc::c_void as usize);
+        })*
+    };
 }
 
 macro_rules! std_function {
-    ($name:ident(ctx) -> u64) => {
-        #[allow(clippy::needless_lifetimes)]
-        #[allow(non_snake_case)]
-        pub fn $name<'b>(&'b self) -> inkwell::values::BasicValueEnum<'b> {
-            self.call_std(stringify!($name), &[])
-        }
-    };
-    ($name:ident(ctx, $($argsn:ident), + $(,)?)) => {
-        #[allow(clippy::needless_lifetimes)]
-        #[allow(non_snake_case)]
-        pub fn $name<'b>(&'b self, $($argsn: inkwell::values::BasicValueEnum<'b>),+) -> inkwell::values::BasicValueEnum<'b> {
-            let arguments = &[$($argsn.into()),+];
-            self.call_std(stringify!($name), arguments)
-        }
-    };
     ($name:ident($($argsn:ident), * $(,)?)) => {
         #[allow(clippy::needless_lifetimes)]
         #[allow(non_snake_case)]
-        pub fn $name<'b>(&'b self, $($argsn: inkwell::values::BasicValueEnum<'b>),*) -> inkwell::values::BasicValueEnum<'b> {
+        pub fn $name(&self, $($argsn: inkwell::values::BasicValueEnum<'guard>),*) -> inkwell::values::BasicValueEnum<'guard> {
             let arguments = &[$($argsn.into()),*];
             self.call(stringify!($name), arguments)
         }

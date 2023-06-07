@@ -12,14 +12,12 @@ impl<'guard> Codegen<'guard> {
     /// It does uses the macro [macros::build_std_functions], that passes a list of functions and
     /// registers into the LLVM context.
     pub fn initialize_std_functions(&self) {
-        let object = self.ctx.i64_type();
-
         macros::build_std_functions!(self, {
-            new_u61_object(u64) -> object
+            prim__new_u61(u64) -> u64
         });
     }
 
-    std_function!(new_u61_object(value));
+    std_function!(prim__new_u61(value));
 
     /// Call a function from the Soft runtime, that passes the context as the first argument.
     /// This is used for functions that are not part of the MIR, but are part of the runtime.
@@ -52,11 +50,11 @@ impl<'guard> Codegen<'guard> {
     }
 
     /// Call a function a function that returns a [BasicValueEnum].
-    pub fn call<'a>(
-        &'a self,
+    pub fn call(
+        &self,
         name: &str,
-        args: &[BasicMetadataValueEnum<'a>],
-    ) -> BasicValueEnum<'a> {
+        args: &[BasicMetadataValueEnum<'guard>],
+    ) -> BasicValueEnum<'guard> {
         self.builder
             .build_direct_call(self.module.get_function(name).unwrap(), args.as_ref(), "")
             .try_as_basic_value()
