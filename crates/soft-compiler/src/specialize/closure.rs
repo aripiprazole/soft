@@ -11,7 +11,11 @@ use super::{
     tree::{IsLifted, PrimKind, Symbol, Term, TermKind, VariableKind},
 };
 
-pub type BoundVars<'a> = im_rc::HashMap<Symbol<'a>, usize>;
+#[derive(Default, Clone)]
+pub struct BoundVars<'a> {
+    vars: im_rc::HashMap<Symbol<'a>, usize>,
+    count: usize,
+}
 
 /// This trait is used to perform closure conversion.
 pub trait ClosureConvert<'a> {
@@ -76,7 +80,7 @@ impl<'a> ClosureConvert<'a> for PrimKind<'a> {
                 x.closure_convert_help(bound_vars.clone());
                 val.closure_convert_help(bound_vars);
             }
-            PrimKind::GetEnv(_) => {}
+            PrimKind::GetEnv(_, _) => {}
             PrimKind::CreateClosure(x, env) => {
                 x.closure_convert_help(bound_vars.clone());
                 for (_, value) in env {
@@ -97,7 +101,9 @@ impl<'a> ClosureConvert<'a> for Term<'a> {
             TermKind::Variable(var) => match var {
                 VariableKind::Global(_) => {}
                 VariableKind::Local(ref mut idx, name) => {
-                    // *idx = *bound_vars.get(name).unwrap();
+                    if let Some(index) = bound_vars.vars.get(name) {
+                        *idx = *index;
+                    }
                 }
             },
             TermKind::Quote(_) => {}
@@ -127,13 +133,14 @@ impl<'a> ClosureConvert<'a> for Term<'a> {
 
                 for (name, value) in binds {
                     value.closure_convert_help(bound_ctx.clone());
-                    bound_ctx.insert(name.clone(), bound_ctx.len());
+                    bound_ctx.vars.insert(name.clone(), bound_ctx.count);
+                    bound_ctx.count += 1;
                 }
 
                 val.closure_convert_help(bound_ctx);
             }
             TermKind::Lambda(def, mode) if *mode == IsLifted::No => {
-                let bound_vars: HashMap<_, _> = def
+                let new_ctx: HashMap<_, _> = def
                     .parameters
                     .clone()
                     .into_iter()
@@ -141,11 +148,16 @@ impl<'a> ClosureConvert<'a> for Term<'a> {
                     .map(|(x, y)| (y, x))
                     .collect();
 
-                def.body.closure_convert_help(bound_vars.clone());
+                let new_ctx = BoundVars {
+                    vars: new_ctx,
+                    count: def.parameters.len(),
+                };
+
+                def.body.closure_convert_help(new_ctx.clone());
 
                 let mut fv = Default::default();
                 def.body
-                    .free_vars_helper(bound_vars.iter().map(|x| x.0).cloned().collect(), &mut fv);
+                    .free_vars_helper(new_ctx.vars.iter().map(|x| x.0).cloned().collect(), &mut fv);
 
                 *mode = IsLifted::Yes;
 
@@ -153,7 +165,8 @@ impl<'a> ClosureConvert<'a> for Term<'a> {
                     let subst = fv
                         .clone()
                         .into_iter()
-                        .map(|name| (name.clone(), TermKind::Prim(PrimKind::GetEnv(name.clone()))))
+                        .enumerate()
+                        .map(|(n, m)| (m.clone(), TermKind::Prim(PrimKind::GetEnv(n, m.clone()))))
                         .collect();
 
                     def.body.substitute(subst);
@@ -169,7 +182,10 @@ impl<'a> ClosureConvert<'a> for Term<'a> {
                                     x.clone(),
                                     Term::new(
                                         span.clone(),
-                                        TermKind::Variable(VariableKind::Local(0, x.clone())),
+                                        TermKind::Variable(VariableKind::Local(
+                                            *bound_vars.vars.get(&x).unwrap(),
+                                            x.clone(),
+                                        )),
                                     ),
                                 )
                             })
@@ -190,7 +206,7 @@ mod tests {
 
     #[test]
     pub fn it_works() {
-        let code = "(lambda (z) (lambda (x) (lambda (y) (x z))))";
+        let code = "(lambda (x z) (lambda (y) (z x)))";
         let parsed = parse(code).unwrap();
         let mut specialized = specialize(parsed[0].clone());
         println!("{}", specialized);

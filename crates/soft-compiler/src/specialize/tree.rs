@@ -90,7 +90,7 @@ pub enum PrimKind<'a> {
     BoxSet(Box<Term<'a>>, Box<Term<'a>>),
 
     /// Gets the environment of a closure.
-    GetEnv(Symbol<'a>),
+    GetEnv(usize, Symbol<'a>),
 
     // Creates a closure from a function and a list of arguments.
     CreateClosure(Box<Term<'a>>, Vec<(Symbol<'a>, Term<'a>)>),
@@ -119,7 +119,7 @@ impl<'a> Display for PrimKind<'a> {
             PrimKind::Box(expr) => write!(f, "(box {})", expr),
             PrimKind::Unbox(expr) => write!(f, "(unbox {})", expr),
             PrimKind::BoxSet(expr, value) => write!(f, "(box-set! {} {})", expr, value),
-            PrimKind::GetEnv(expr) => write!(f, "(get-env {})", expr),
+            PrimKind::GetEnv(n, expr) => write!(f, "(!{n}~{})", expr),
             PrimKind::CreateClosure(func, args) => {
                 write!(f, "(create-closure {} ", func)?;
                 if !args.is_empty() {

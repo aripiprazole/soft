@@ -68,7 +68,7 @@ impl<'a> VarCollector<'a> for PrimKind<'a> {
                 bx.free_vars_helper(bound_vars.clone(), free_vars);
                 val.free_vars_helper(bound_vars, free_vars);
             }
-            PrimKind::GetEnv(_) => {}
+            PrimKind::GetEnv(_, _) => {}
             PrimKind::CreateClosure(definition, env) => {
                 definition.free_vars_helper(bound_vars.clone(), free_vars);
                 for (_, value) in env {

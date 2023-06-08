@@ -76,7 +76,7 @@ impl<'a> Substitutable<'a> for PrimKind<'a> {
                 bx.substitute(subst.clone());
                 val.substitute(subst);
             }
-            PrimKind::GetEnv(_) => {}
+            PrimKind::GetEnv(_, _) => {}
             PrimKind::CreateClosure(name, args) => {
                 name.substitute(subst.clone());
                 for arg in args {
