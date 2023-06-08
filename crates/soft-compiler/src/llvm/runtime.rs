@@ -19,7 +19,7 @@ impl<'guard> Codegen<'guard> {
     pub fn initialize_std_functions(&self) {
         macros::build_std_functions!(self, {
             prim__new_u61(u64) -> u64,
-            prim__function(ptr) -> u64,
+            prim__function(ptr, u8) -> u64,
             prim__add_tagged(u64, u64) -> u64,
             prim__sub_tagged(u64, u64) -> u64,
             prim__mul_tagged(u64, u64) -> u64,
@@ -29,6 +29,10 @@ impl<'guard> Codegen<'guard> {
             prim__and_tagged(u64, u64) -> u64,
             prim__xor_tagged(u64, u64) -> u64,
             prim__or_tagged(u64, u64) -> u64,
+            prim__get_function_count(u64) -> ptr,
+            prim__get_function_ptr(u64) -> ptr,
+            prim__get_function_env(u64) -> ptr,
+            prim__get_function_arity(u64) -> u8,
             prim__nil() -> u64,
             soft_panic(str) -> u64,
         });
@@ -50,6 +54,10 @@ impl<'guard> Codegen<'guard> {
                 prim__and_tagged,
                 prim__xor_tagged,
                 prim__or_tagged,
+                prim__get_function_count,
+                prim__get_function_ptr,
+                prim__get_function_env,
+                prim__get_function_arity,
                 prim__nil,
                 soft_panic,
             ]
@@ -78,7 +86,7 @@ impl<'guard> Codegen<'guard> {
     }
 
     std_function!(prim__new_u61(value));
-    std_function!(prim__function(value));
+    std_function!(prim__function(value, arity));
     std_function!(prim__add_tagged(lhs, rhs));
     std_function!(prim__sub_tagged(lhs, rhs));
     std_function!(prim__mul_tagged(lhs, rhs));
@@ -88,6 +96,10 @@ impl<'guard> Codegen<'guard> {
     std_function!(prim__and_tagged(lhs, rhs));
     std_function!(prim__xor_tagged(lhs, rhs));
     std_function!(prim__or_tagged(lhs, rhs));
+    std_function!(prim__get_function_ptr(value));
+    std_function!(prim__get_function_count(value));
+    std_function!(prim__get_function_arity(value));
+    std_function!(prim__get_function_env(value));
     std_function!(prim__nil());
     std_function!(soft_panic(message));
 

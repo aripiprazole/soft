@@ -241,6 +241,7 @@ pub struct Symbol {
 #[derive(Debug)]
 pub struct Function {
     pub ptr: *mut libc::c_void,
+    pub arity: u8,
     pub vec: Vec<TaggedPtr>,
 }
 
@@ -477,6 +478,7 @@ mod tests {
 
         let function = TaggedPtr::alloc(Function {
             ptr: test_if_tags_are_ok as *mut libc::c_void,
+            arity: 0,
             vec: vec![],
         });
 

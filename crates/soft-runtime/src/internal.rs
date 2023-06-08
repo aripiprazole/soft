@@ -8,9 +8,10 @@ pub extern "C" fn prim__nil() -> TaggedPtr {
 }
 
 #[no_mangle]
-pub extern "C" fn prim__function(value: u64) -> TaggedPtr {
+pub extern "C" fn prim__function(value: u64, arity: u8) -> TaggedPtr {
     TaggedPtr::alloc(Function {
         ptr: value as *mut _,
+        arity,
         vec: vec![],
     })
 }
@@ -81,6 +82,30 @@ pub extern "C" fn prim__xor_tagged(lhs: TaggedPtr, rhs: TaggedPtr) -> TaggedPtr 
     let lhs = lhs.assert().number();
     let rhs = rhs.assert().number();
     TaggedPtr::new_number(lhs ^ rhs)
+}
+
+#[no_mangle]
+pub extern "C" fn prim__get_function_ptr(value: TaggedPtr) -> *mut libc::c_void {
+    let function = value.assert::<Function>().pointer();
+    function.ptr
+}
+
+#[no_mangle]
+pub extern "C" fn prim__get_function_count(value: TaggedPtr) -> u64 {
+    let function = value.assert::<Function>().pointer();
+    function.vec.len() as u64
+}
+
+#[no_mangle]
+pub extern "C" fn prim__get_function_env(value: TaggedPtr) -> *mut libc::c_void {
+    let function = value.assert::<Function>().pointer();
+    function.vec.as_ptr() as *mut _
+}
+
+#[no_mangle]
+pub extern "C" fn prim__get_function_arity(value: TaggedPtr) -> u8 {
+    let function = value.assert::<Function>().pointer();
+    function.arity
 }
 
 #[no_mangle]

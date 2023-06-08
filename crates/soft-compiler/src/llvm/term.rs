@@ -1,6 +1,9 @@
 use inkwell::attributes::AttributeLoc;
 use inkwell::values::BasicValue;
 use inkwell::values::BasicValueEnum;
+use inkwell::AddressSpace;
+use inkwell::IntPredicate;
+use itertools::Itertools;
 
 use crate::specialize::tree::Definition;
 use crate::specialize::tree::OperationKind;
@@ -32,9 +35,69 @@ impl<'guard> Codegen<'guard> {
             Operation(kind, operands) if operands.len() == 1 => self.unary(kind, operands),
             Operation(kind, operands) if operands.len() > 1 => self.binary(kind, operands),
             Operation(_, _) => todo!(),
-            Call(_, _) => todo!(),
+            Call(callee, arguments) => self.mk_call(*callee, arguments),
             Prim(_) => todo!(),
         }
+    }
+
+    fn mk_call(&mut self, callee: Term, arguments: Vec<Term>) -> BasicValueEnum<'guard> {
+        let prev = self.bb.unwrap();
+        let parent = prev.get_parent().unwrap();
+
+        let callee = self.term(callee);
+
+        let expected_arity = self.ctx.i8_type().const_int(arguments.len() as u64, false);
+        let actual_arity = self.prim__get_function_arity(callee);
+
+        let then = self.ctx.append_basic_block(parent, "call");
+        let fail = self.ctx.append_basic_block(parent, "fail");
+
+        // If function.arity = call.arguments
+        //   Then proceed to execute the call
+        //   Otherwise fails
+        let valid = self.builder.build_int_compare(
+            IntPredicate::EQ,
+            actual_arity.into_int_value(),
+            expected_arity,
+            "",
+        );
+
+        self.builder.build_conditional_branch(valid, then, fail);
+
+        // Fail call
+        self.builder.position_at_end(fail);
+        self.incorrect_arity_fail(arguments.len() as u8);
+        self.builder.build_unreachable();
+
+        // Proceed call
+        self.builder.position_at_end(then);
+
+        let ptr = self.prim__get_function_ptr(callee);
+        let env = self.prim__get_function_env(callee);
+
+        // Set the first parameter as the closure's context
+        let mut params = vec![self.ctx.i64_type().into(); arguments.len()];
+        params.insert(0, llvm_type!(self, ptr).into());
+
+        let ty = self.ctx.i64_type().fn_type(&params, false);
+
+        let ptr = self.builder.build_pointer_cast(
+            ptr.into_pointer_value(),
+            ty.ptr_type(AddressSpace::default()),
+            "",
+        );
+
+        let mut arguments = arguments
+            .into_iter()
+            .map(|term| self.term(term).into())
+            .collect_vec();
+        arguments.insert(0, env.into());
+
+        self.builder
+            .build_indirect_call(ty, ptr, &arguments, "")
+            .try_as_basic_value()
+            .left()
+            .expect("The result is not a value")
     }
 
     fn lambda(&mut self, definition: Definition) -> BasicValueEnum<'guard> {
@@ -46,7 +109,7 @@ impl<'guard> Codegen<'guard> {
 
         let ty = self.ctx.i64_type().fn_type(&params, false);
 
-        let arity = params.len();
+        let arity = params.len() - 1;
         let name_stack = self.name_stack.join(".");
         let local_name = match self.anonymous {
             Some(ref name) => format!("<{}.{name} as soft.function(arity: {arity})>", name_stack),
@@ -84,8 +147,9 @@ impl<'guard> Codegen<'guard> {
         let ty = llvm_type!(self, ptr);
         let lambda = lambda.as_global_value().as_pointer_value();
         let lambda = self.builder.build_pointer_cast(lambda, ty, "");
+        let arity = self.ctx.i8_type().const_int(arity as u64, false);
 
-        self.prim__function(lambda.as_basic_value_enum())
+        self.prim__function(lambda.as_basic_value_enum(), arity.into())
     }
 
     fn binary(&mut self, kind: OperationKind, mut operands: Vec<Term>) -> BasicValueEnum<'guard> {
@@ -147,5 +211,11 @@ impl<'guard> Codegen<'guard> {
             .build_global_string_ptr(&message, "unary.panic");
         self.soft_panic(message.as_pointer_value().as_basic_value_enum());
         self.prim__nil()
+    }
+
+    fn incorrect_arity_fail(&mut self, expected: u8) {
+        let message = format!("The call failed, because the expected arity is {expected}");
+        let message = self.builder.build_global_string_ptr(&message, "call.panic");
+        self.soft_panic(message.as_pointer_value().as_basic_value_enum());
     }
 }
