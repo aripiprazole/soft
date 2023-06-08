@@ -150,8 +150,6 @@ impl<'a> ClosureConvert<'a> for Term<'a> {
                 *mode = IsLifted::Yes;
 
                 if !fv.is_empty() {
-                    def.parameters.push(Symbol::new("env"));
-
                     let subst = fv
                         .clone()
                         .into_iter()

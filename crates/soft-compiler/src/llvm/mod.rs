@@ -1,4 +1,5 @@
 use fxhash::FxHashMap;
+use inkwell::attributes::AttributeLoc;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::debug_info::{AsDIScope, DWARFEmissionKind, DWARFSourceLanguage};
@@ -92,6 +93,12 @@ impl<'guard> Codegen<'guard> {
         );
         fun.set_subprogram(difunction);
 
+        // This is the main function, so it isn't called so often, so it's cold
+        fun.add_attribute(AttributeLoc::Function, self.attr("cold"));
+        fun.add_attribute(AttributeLoc::Function, self.attr("noinline"));
+        fun.add_attribute(AttributeLoc::Function, self.attr("nobuiltin"));
+        fun.add_attribute(AttributeLoc::Function, self.attr("uwtable"));
+
         let entry = self.ctx.append_basic_block(fun, "entry");
         self.builder.position_at_end(entry);
         self.bb = Some(entry);
@@ -154,6 +161,7 @@ mod tests {
         let context = Context::create();
         let mut codegen = Codegen::new(&context);
         codegen.initialize_std_functions();
+        codegen.setup_attributes();
 
         let code = parse("(lambda () 42)").unwrap();
         let mut code = specialize(code.first().unwrap().clone());

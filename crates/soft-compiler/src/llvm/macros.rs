@@ -32,7 +32,13 @@ macro_rules! llvm_type {
 }
 
 macro_rules! build_std_functions {
-    ($codegen:expr, {$($name:ident($($x:tt),* $(,)?) -> $ret:tt),+ $(,)?}) => {{
+    ($codegen:expr, {
+        $(
+            $name:ident($($x:tt),* $(,)?)
+            -> $ret:tt
+        ),+
+        $(,)?
+    }) => {{
         $({
             let f = $codegen.module.get_function(stringify!($name));
             if f.is_none() {

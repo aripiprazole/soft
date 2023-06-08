@@ -1,3 +1,5 @@
+use inkwell::attributes::Attribute;
+use inkwell::attributes::AttributeLoc;
 use inkwell::execution_engine::ExecutionEngine;
 use inkwell::values::BasicMetadataValueEnum;
 use inkwell::values::BasicValueEnum;
@@ -54,6 +56,19 @@ impl<'guard> Codegen<'guard> {
         );
     }
 
+    pub fn setup_attributes(&self) {
+        let noreturn = self.attr("noreturn");
+        let uwtable = self.attr("uwtable");
+        let noinline = self.attr("noinline");
+
+        {
+            let f = self.module.get_function(stringify!(soft_panic)).unwrap();
+            f.add_attribute(AttributeLoc::Function, noinline);
+            f.add_attribute(AttributeLoc::Function, noreturn);
+            f.add_attribute(AttributeLoc::Function, uwtable);
+        }
+    }
+
     std_function!(prim__new_u61(value));
     std_function!(prim__function(value));
     std_function!(prim__add_tagged(lhs, rhs));
@@ -67,6 +82,11 @@ impl<'guard> Codegen<'guard> {
     std_function!(prim__or_tagged(lhs, rhs));
     std_function!(prim__nil());
     std_function!(soft_panic(message));
+
+    pub fn attr(&self, name: &str) -> Attribute {
+        let attr = Attribute::get_named_enum_kind_id(name);
+        self.ctx.create_enum_attribute(attr, 1)
+    }
 
     /// Call a function from the Soft runtime, that passes the context as the first argument.
     /// This is used for functions that are not part of the MIR, but are part of the runtime.
