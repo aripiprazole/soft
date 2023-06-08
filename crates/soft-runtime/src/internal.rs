@@ -8,6 +8,24 @@ pub extern "C" fn prim__nil() -> TaggedPtr {
 }
 
 #[no_mangle]
+pub extern "C" fn prim__true() -> TaggedPtr {
+    TaggedPtr::alloc(true)
+}
+
+#[no_mangle]
+pub extern "C" fn prim__false() -> TaggedPtr {
+    TaggedPtr::alloc(false)
+}
+
+#[no_mangle]
+pub extern "C" fn prim__string(message: *mut libc::c_void) -> TaggedPtr {
+    unsafe {
+        let message = CStr::from_ptr(message as *mut _).to_string_lossy();
+        TaggedPtr::alloc(message.into_owned())
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn prim__function(value: u64, arity: u8) -> TaggedPtr {
     TaggedPtr::alloc(Function {
         ptr: value as *mut _,

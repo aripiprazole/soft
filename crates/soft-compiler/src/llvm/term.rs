@@ -19,32 +19,34 @@ impl<'guard> Codegen<'guard> {
     pub fn term(&mut self, term: Term) -> BasicValueEnum<'guard> {
         match term.data {
             Atom(_) => todo!(),
+            Let(_, _) => todo!(),
+            Set(_, _, _, _) => todo!(),
+            Block(_) => todo!(),
+            Quote(_) => todo!(),
+            If(_, _, _) => todo!(),
+            Prim(_) => todo!(),
+            Bool(true) => self.prim__true(),
+            Bool(false) => self.prim__false(),
+            Lambda(definition, _) => self.lambda(definition),
+            Call(callee, arguments) => self.mk_call(*callee, arguments),
+            Operation(kind, operands) if operands.len() == 1 => self.unary(kind, operands),
+            Operation(kind, operands) if operands.len() > 1 => self.binary(kind, operands),
+            Operation(_, _) => todo!(),
+            Variable(VariableKind::Global(_)) => todo!(),
+            String(value) => {
+                let value = self.builder.build_global_string_ptr(value, "const.string");
+                self.prim__str(value.as_basic_value_enum())
+            }
             Number(value) => {
                 let value = self.ctx.i64_type().const_int(value, false).into();
-
                 self.prim__new_u61(value)
             }
-            String(_) => todo!(),
-            Bool(true) => todo!(),
-            Bool(false) => todo!(),
             Variable(VariableKind::Local(_, symbol)) => match self.names.get(symbol.name()) {
                 Some(value) => *value,
                 None => {
                     todo!()
                 }
             },
-            Variable(_) => todo!(),
-            Let(_, _) => todo!(),
-            Set(_, _, _, _) => todo!(),
-            Lambda(definition, _) => self.lambda(definition),
-            Block(_) => todo!(),
-            Quote(_) => todo!(),
-            If(_, _, _) => todo!(),
-            Operation(kind, operands) if operands.len() == 1 => self.unary(kind, operands),
-            Operation(kind, operands) if operands.len() > 1 => self.binary(kind, operands),
-            Operation(_, _) => todo!(),
-            Call(callee, arguments) => self.mk_call(*callee, arguments),
-            Prim(_) => todo!(),
         }
     }
 

@@ -250,6 +250,10 @@ pub struct Reference {
     pub ptr: *mut libc::c_void,
 }
 
+impl sealed::Taggable for bool {
+    const TAG: Tag = Tag::Boolean;
+}
+
 impl sealed::Taggable for Pair {
     const TAG: Tag = Tag::Pair;
 }
@@ -285,6 +289,8 @@ impl sealed::Scoped for Function {}
 impl sealed::Scoped for Reference {}
 
 impl sealed::Scoped for String {}
+
+impl sealed::Scoped for bool {}
 
 // A sealed trait that is used internally.
 pub trait Scoped: sealed::Scoped {}

@@ -34,6 +34,9 @@ impl<'guard> Codegen<'guard> {
             prim__get_function_env(u64) -> ptr,
             prim__get_function_arity(u64) -> u8,
             prim__nil() -> u64,
+            prim__true() -> u64,
+            prim__false() -> u64,
+            prim__string(str) -> u64,
             soft_panic(str) -> u64,
         });
     }
@@ -44,6 +47,9 @@ impl<'guard> Codegen<'guard> {
             engine,
             [
                 prim__new_u61,
+                prim__true,
+                prim__false,
+                prim__string,
                 prim__function,
                 prim__add_tagged,
                 prim__sub_tagged,
@@ -101,6 +107,9 @@ impl<'guard> Codegen<'guard> {
     std_function!(prim__get_function_arity(value));
     std_function!(prim__get_function_env(value));
     std_function!(prim__nil());
+    std_function!(prim__true());
+    std_function!(prim__false());
+    std_function!(prim__str(str));
     std_function!(soft_panic(message));
 
     pub fn attr(&self, name: &str) -> Attribute {

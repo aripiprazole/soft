@@ -205,7 +205,7 @@ mod tests {
                 .get_function::<unsafe extern "C" fn() -> TaggedPtr>(&main)
                 .unwrap_or_else(|_| panic!("Could not find the main function: {main}"));
 
-            println!("f.call() = {}", f.call().assert().number());
+            println!("f.call() = {}", f.call().assert::<bool>().pointer());
         }
     }
 }
