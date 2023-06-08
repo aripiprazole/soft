@@ -1,6 +1,5 @@
 use inkwell::values::BasicValue;
 use inkwell::values::BasicValueEnum;
-use inkwell::values::InstructionValue;
 
 use crate::specialize::tree::OperationKind;
 use crate::specialize::tree::Term;

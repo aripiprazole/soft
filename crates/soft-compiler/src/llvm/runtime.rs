@@ -1,9 +1,12 @@
+use inkwell::execution_engine::ExecutionEngine;
 use inkwell::values::BasicMetadataValueEnum;
 use inkwell::values::BasicValueEnum;
 
 use super::macros;
 use super::macros::std_function;
 use super::Codegen;
+
+use soft_runtime::internal::*;
 
 impl<'guard> Codegen<'guard> {
     /// Initialize the `internal` and the `standard-library` functions that are used by the compiler
@@ -26,6 +29,27 @@ impl<'guard> Codegen<'guard> {
             prim__nil() -> u64,
             soft_panic(str) -> u64,
         });
+    }
+
+    pub fn initialize_jit_functions(&self, engine: &ExecutionEngine) {
+        macros::register_jit_function!(
+            self,
+            engine,
+            [
+                prim__new_u61,
+                prim__add_tagged,
+                prim__sub_tagged,
+                prim__mul_tagged,
+                prim__mod_tagged,
+                prim__shl_tagged,
+                prim__shr_tagged,
+                prim__and_tagged,
+                prim__xor_tagged,
+                prim__or_tagged,
+                prim__nil,
+                soft_panic,
+            ]
+        );
     }
 
     std_function!(prim__new_u61(value));
