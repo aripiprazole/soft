@@ -1,3 +1,4 @@
+use fxhash::FxHashMap;
 use inkwell::attributes::AttributeLoc;
 use inkwell::values::BasicValue;
 use inkwell::values::BasicValueEnum;
@@ -9,6 +10,7 @@ use crate::specialize::tree::Definition;
 use crate::specialize::tree::OperationKind;
 use crate::specialize::tree::Term;
 use crate::specialize::tree::TermKind::*;
+use crate::specialize::tree::VariableKind;
 
 use super::macros::llvm_type;
 use super::Codegen;
@@ -25,6 +27,12 @@ impl<'guard> Codegen<'guard> {
             String(_) => todo!(),
             Bool(true) => todo!(),
             Bool(false) => todo!(),
+            Variable(VariableKind::Local(_, symbol)) => match self.names.get(symbol.name()) {
+                Some(value) => *value,
+                None => {
+                    todo!()
+                }
+            },
             Variable(_) => todo!(),
             Let(_, _) => todo!(),
             Set(_, _, _, _) => todo!(),
@@ -102,6 +110,8 @@ impl<'guard> Codegen<'guard> {
 
     fn lambda(&mut self, definition: Definition) -> BasicValueEnum<'guard> {
         let prev = self.bb.unwrap();
+        let mut names = FxHashMap::default();
+        std::mem::swap(&mut self.names, &mut names);
 
         let mut params = vec![self.ctx.i64_type().into(); definition.parameters.len()];
         // Set the first parameter as the closure's context
@@ -127,6 +137,7 @@ impl<'guard> Codegen<'guard> {
 
             // Set name of the parameter for debug porpuses
             param.set_name(symbol.name());
+            self.names.insert(symbol.name().into(), *param);
         }
 
         lambda.add_attribute(AttributeLoc::Function, self.attr("nobuiltin"));
@@ -142,6 +153,8 @@ impl<'guard> Codegen<'guard> {
 
         // Return at the old/previous position, before generating code with this definition
         self.builder.position_at_end(prev);
+
+        std::mem::swap(&mut names, &mut self.names);
 
         // Get the function pointer as the new function
         let ty = llvm_type!(self, ptr);

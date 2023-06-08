@@ -97,7 +97,7 @@ impl<'a> ClosureConvert<'a> for Term<'a> {
             TermKind::Variable(var) => match var {
                 VariableKind::Global(_) => {}
                 VariableKind::Local(ref mut idx, name) => {
-                    *idx = *bound_vars.get(name).unwrap();
+                    // *idx = *bound_vars.get(name).unwrap();
                 }
             },
             TermKind::Quote(_) => {}
