@@ -101,9 +101,9 @@ impl<'a> Display for PrimKind<'a> {
         match self {
             PrimKind::TypeOf(expr) => write!(f, "(type-of {})", expr),
             PrimKind::Vec(exprs) => {
-                write!(f, "(vec! ")?;
+                write!(f, "(vec!")?;
                 for expr in exprs {
-                    write!(f, "{} ", expr)?;
+                    write!(f, " {}", expr)?;
                 }
                 write!(f, ")")
             }
@@ -301,7 +301,7 @@ impl<'a> Display for TermKind<'a> {
             TermKind::String(s) => write!(f, "\"{}\"", s),
             TermKind::Bool(b) => write!(f, "{}", b),
             TermKind::Variable(v) => match v {
-                VariableKind::Local(_, name) => write!(f, "{}", name),
+                VariableKind::Local(idx, name) => write!(f, "{}~{idx}", name),
                 VariableKind::Global(name) => write!(f, "#{}", name),
             },
             TermKind::Let(definitions, body) => {
@@ -342,9 +342,9 @@ impl<'a> Display for TermKind<'a> {
                 write!(f, ") {})", def.body)
             }
             TermKind::Block(expressions) => {
-                write!(f, "(block! ")?;
+                write!(f, "(block!")?;
                 for expression in expressions {
-                    write!(f, "{} ", expression)?;
+                    write!(f, " {}", expression)?;
                 }
                 write!(f, ")")
             }
@@ -353,9 +353,9 @@ impl<'a> Display for TermKind<'a> {
                 write!(f, "(if! {} {} {})", scrutinee, then, else_)
             }
             TermKind::Operation(operation, args) => {
-                write!(f, "({} ", operation)?;
+                write!(f, "({}", operation)?;
                 for arg in args {
-                    write!(f, "{} ", arg)?;
+                    write!(f, " {}", arg)?;
                 }
                 write!(f, ")")
             }

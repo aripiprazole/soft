@@ -81,7 +81,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_number(&mut self) -> Result {
-        self.save_jump();
+        self.save();
 
         let mut num = 0;
 

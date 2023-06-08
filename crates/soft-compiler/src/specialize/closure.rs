@@ -1,7 +1,7 @@
-//! This module does what is called 'closure convertion' it lifts all of the lambdas with closures
+//! This module does what is called 'closure conversion' it lifts all of the lambdas with closures
 //! to lambdas without closures.
 
-use im_rc::HashSet;
+use im_rc::HashMap;
 
 use crate::location::Spanned;
 
@@ -11,23 +11,25 @@ use super::{
     tree::{IsLifted, PrimKind, Symbol, Term, TermKind, VariableKind},
 };
 
-/// This trait is used to perform closure convertion.
+pub type BoundVars<'a> = im_rc::HashMap<Symbol<'a>, usize>;
+
+/// This trait is used to perform closure conversion.
 pub trait ClosureConvert<'a> {
     fn closure_convert(&mut self) {
         self.closure_convert_help(Default::default())
     }
 
-    fn closure_convert_help(&mut self, bound_vars: im_rc::HashSet<Symbol<'a>>);
+    fn closure_convert_help(&mut self, bound_vars: BoundVars<'a>);
 }
 
 impl<'a, T: ClosureConvert<'a>> ClosureConvert<'a> for Spanned<T> {
-    fn closure_convert_help(&mut self, bound_vars: im_rc::HashSet<Symbol<'a>>) {
+    fn closure_convert_help(&mut self, bound_vars: BoundVars<'a>) {
         self.data.closure_convert_help(bound_vars)
     }
 }
 
 impl<'a, T: ClosureConvert<'a>> ClosureConvert<'a> for Vec<T> {
-    fn closure_convert_help(&mut self, bound_vars: im_rc::HashSet<Symbol<'a>>) {
+    fn closure_convert_help(&mut self, bound_vars: BoundVars<'a>) {
         for elem in self {
             elem.closure_convert_help(bound_vars.clone())
         }
@@ -35,13 +37,13 @@ impl<'a, T: ClosureConvert<'a>> ClosureConvert<'a> for Vec<T> {
 }
 
 impl<'a, T: ClosureConvert<'a>> ClosureConvert<'a> for Box<T> {
-    fn closure_convert_help(&mut self, bound_vars: im_rc::HashSet<Symbol<'a>>) {
+    fn closure_convert_help(&mut self, bound_vars: BoundVars<'a>) {
         self.as_mut().closure_convert_help(bound_vars)
     }
 }
 
 impl<'a> ClosureConvert<'a> for PrimKind<'a> {
-    fn closure_convert_help(&mut self, bound_vars: im_rc::HashSet<Symbol<'a>>) {
+    fn closure_convert_help(&mut self, bound_vars: BoundVars<'a>) {
         match self {
             PrimKind::TypeOf(x) => x.closure_convert_help(bound_vars),
             PrimKind::Vec(x) => x.closure_convert_help(bound_vars),
@@ -49,9 +51,9 @@ impl<'a> ClosureConvert<'a> for PrimKind<'a> {
                 x.closure_convert_help(bound_vars.clone());
                 xs.closure_convert_help(bound_vars);
             }
-            PrimKind::Nil => {}
             PrimKind::Head(x) => x.closure_convert_help(bound_vars),
             PrimKind::Tail(x) => x.closure_convert_help(bound_vars),
+            PrimKind::Nil => {}
             PrimKind::VecIndex(x, len) => {
                 x.closure_convert_help(bound_vars.clone());
                 len.closure_convert_help(bound_vars);
@@ -86,13 +88,18 @@ impl<'a> ClosureConvert<'a> for PrimKind<'a> {
 }
 
 impl<'a> ClosureConvert<'a> for Term<'a> {
-    fn closure_convert_help(&mut self, bound_vars: im_rc::HashSet<Symbol<'a>>) {
+    fn closure_convert_help(&mut self, bound_vars: BoundVars<'a>) {
         match &mut self.data {
             TermKind::Atom(_) => {}
             TermKind::Number(_) => {}
             TermKind::String(_) => {}
             TermKind::Bool(_) => {}
-            TermKind::Variable(_) => {}
+            TermKind::Variable(var) => match var {
+                VariableKind::Global(_) => {}
+                VariableKind::Local(ref mut idx, name) => {
+                    *idx = *bound_vars.get(name).unwrap();
+                }
+            },
             TermKind::Quote(_) => {}
             TermKind::Set(_, _ast, tree, _) => {
                 tree.closure_convert_help(bound_vars);
@@ -120,17 +127,25 @@ impl<'a> ClosureConvert<'a> for Term<'a> {
 
                 for (name, value) in binds {
                     value.closure_convert_help(bound_ctx.clone());
-                    bound_ctx.insert(name.clone());
+                    bound_ctx.insert(name.clone(), bound_ctx.len());
                 }
 
                 val.closure_convert_help(bound_ctx);
             }
             TermKind::Lambda(def, mode) if *mode == IsLifted::No => {
-                let bound_vars: HashSet<_> = def.parameters.clone().into_iter().collect();
+                let bound_vars: HashMap<_, _> = def
+                    .parameters
+                    .clone()
+                    .into_iter()
+                    .enumerate()
+                    .map(|(x, y)| (y, x))
+                    .collect();
+
                 def.body.closure_convert_help(bound_vars.clone());
 
                 let mut fv = Default::default();
-                def.body.free_vars_helper(bound_vars.clone(), &mut fv);
+                def.body
+                    .free_vars_helper(bound_vars.iter().map(|x| x.0).cloned().collect(), &mut fv);
 
                 *mode = IsLifted::Yes;
 
