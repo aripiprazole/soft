@@ -24,10 +24,20 @@ pub struct Codegen<'guard> {
     pub ctx: &'guard Context,
     pub module: Module<'guard>,
     pub builder: Builder<'guard>,
+    pub di: DIContext<'guard>,
     pub fpm: LLVMPassManagerRef,
 
     //>>>Contextual stuff
-    pub di: DIContext<'guard>,
+    /// The name stack stuff, everytime the program starts, it puts a name in the stack, `soft`, and
+    /// everytime a `Set` expression is handled, it's added here too.
+    ///
+    /// It does serves to set names to functions and variables for better debugging in the IR.
+    ///
+    /// `soft.closure`, etc
+    pub name_stack: Vec<String>,
+
+    /// Defines if the file is anonymous
+    pub anonymous: Option<String>,
 
     /// The current function let bound names
     pub names: FxHashMap<String, BasicValueEnum<'guard>>,
@@ -64,6 +74,8 @@ impl<'guard> Codegen<'guard> {
             ctx,
             fpm,
             di: DIContext::new(dibuilder, dicu),
+            anonymous: None,
+            name_stack: Vec::new(),
             module,
             builder: ctx.create_builder(),
             names: Default::default(),
@@ -72,6 +84,9 @@ impl<'guard> Codegen<'guard> {
     }
 
     pub fn main(&mut self, name: &str, term: Term) -> String {
+        // Push the current function name to the stack
+        self.name_stack.push(name.into());
+
         let fun_type = self.ctx.i64_type().fn_type(&[], false);
         let name = self.create_name(name);
         let fun = self.module.add_function(&name, fun_type, None);

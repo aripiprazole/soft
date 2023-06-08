@@ -1,3 +1,6 @@
+use std::fmt::format;
+
+use inkwell::attributes::AttributeLoc;
 use inkwell::values::BasicValue;
 use inkwell::values::BasicValueEnum;
 
@@ -44,14 +47,23 @@ impl<'guard> Codegen<'guard> {
         let ty = self.ctx.i64_type().fn_type(&params, false);
 
         // TODO: handle parameters, add to the ctx
-        let lambda = self.module.add_function("<closure>", ty, None);
+        let arity = params.len();
+        let name_stack = self.name_stack.join(".");
+        let local_name = match self.anonymous {
+            Some(ref name) => format!("<{}.{name} as soft.function(arity: {arity})>", name_stack),
+            None => format!("<{}.local as soft.function(arity: {arity})>", name_stack),
+        };
+        let lambda = self.module.add_function(&local_name, ty, None);
         for (i, param) in lambda.get_params().iter().enumerate() {
             // SAFETY: The [`params`] variable has the size [`definition.parameters`]
             let symbol = unsafe { definition.parameters.get_unchecked(i) };
 
             // Set name of the parameter for debug porpuses
-            param.set_name(symbol.name())
+            param.set_name(symbol.name());
         }
+
+        lambda.add_attribute(AttributeLoc::Function, self.attr("nobuiltin"));
+        lambda.add_attribute(AttributeLoc::Function, self.attr("uwtable"));
 
         let bb = self.ctx.append_basic_block(lambda, "entry");
         self.builder.position_at_end(bb);

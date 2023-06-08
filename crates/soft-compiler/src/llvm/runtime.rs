@@ -60,12 +60,20 @@ impl<'guard> Codegen<'guard> {
         let noreturn = self.attr("noreturn");
         let uwtable = self.attr("uwtable");
         let noinline = self.attr("noinline");
+        let nonnull = self.attr("nonnull");
+        let noundef = self.attr("noundef");
+        let align = self.attr_value("align", 8);
 
         {
             let f = self.module.get_function(stringify!(soft_panic)).unwrap();
             f.add_attribute(AttributeLoc::Function, noinline);
             f.add_attribute(AttributeLoc::Function, noreturn);
             f.add_attribute(AttributeLoc::Function, uwtable);
+
+            // nonnull
+            f.add_attribute(AttributeLoc::Param(0), nonnull);
+            f.add_attribute(AttributeLoc::Param(0), noundef);
+            f.add_attribute(AttributeLoc::Param(0), align);
         }
     }
 
@@ -86,6 +94,11 @@ impl<'guard> Codegen<'guard> {
     pub fn attr(&self, name: &str) -> Attribute {
         let attr = Attribute::get_named_enum_kind_id(name);
         self.ctx.create_enum_attribute(attr, 1)
+    }
+
+    pub fn attr_value(&self, name: &str, value: u64) -> Attribute {
+        let attr = Attribute::get_named_enum_kind_id(name);
+        self.ctx.create_enum_attribute(attr, value)
     }
 
     /// Call a function from the Soft runtime, that passes the context as the first argument.
