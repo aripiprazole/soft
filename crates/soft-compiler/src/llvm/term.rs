@@ -1,5 +1,3 @@
-use std::fmt::format;
-
 use inkwell::attributes::AttributeLoc;
 use inkwell::values::BasicValue;
 use inkwell::values::BasicValueEnum;
@@ -42,11 +40,12 @@ impl<'guard> Codegen<'guard> {
     fn lambda(&mut self, definition: Definition) -> BasicValueEnum<'guard> {
         let prev = self.bb.unwrap();
 
-        // TODO: handle varargs
-        let params = vec![self.ctx.i64_type().into(); definition.parameters.len()];
+        let mut params = vec![self.ctx.i64_type().into(); definition.parameters.len()];
+        // Set the first parameter as the closure's context
+        params.insert(0, llvm_type!(self, ptr).into());
+
         let ty = self.ctx.i64_type().fn_type(&params, false);
 
-        // TODO: handle parameters, add to the ctx
         let arity = params.len();
         let name_stack = self.name_stack.join(".");
         let local_name = match self.anonymous {
@@ -54,7 +53,12 @@ impl<'guard> Codegen<'guard> {
             None => format!("<{}.local as soft.function(arity: {arity})>", name_stack),
         };
         let lambda = self.module.add_function(&local_name, ty, None);
-        for (i, param) in lambda.get_params().iter().enumerate() {
+
+        lambda.get_nth_param(0).unwrap().set_name("closure_env");
+
+        // Skips the first arguments, since it's the environment argument
+        // TODO: handle parameters, add to the ctx
+        for (i, param) in lambda.get_params().iter().skip(1).enumerate() {
             // SAFETY: The [`params`] variable has the size [`definition.parameters`]
             let symbol = unsafe { definition.parameters.get_unchecked(i) };
 
@@ -64,6 +68,7 @@ impl<'guard> Codegen<'guard> {
 
         lambda.add_attribute(AttributeLoc::Function, self.attr("nobuiltin"));
         lambda.add_attribute(AttributeLoc::Function, self.attr("uwtable"));
+        lambda.add_attribute(AttributeLoc::Param(0), self.attr_value("align", 8));
 
         let bb = self.ctx.append_basic_block(lambda, "entry");
         self.builder.position_at_end(bb);
