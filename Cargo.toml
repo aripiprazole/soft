@@ -5,3 +5,5 @@ members = [
     "crates/soft-cli",
     "crates/soft-compiler",
 ]
+
+resolver = "1"

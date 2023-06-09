@@ -1,4 +1,4 @@
-//! This module describes a [Loc] that is a newtype wrapper that is used to localize things inside
+//! This module describes a [Loc] that is a new-type wrapper that is used to localize things inside
 //! the source code. It's used to represent the character representation in bytes.
 
 use std::{
@@ -15,33 +15,13 @@ pub struct Loc(pub usize);
 #[derive(Debug, Clone)]
 pub struct Spanned<T> {
     pub data: T,
-    pub loc: Range<Loc>,
+    pub range: Range<Loc>,
 }
 
 impl<T> Spanned<T> {
-    pub fn stub(data: T) -> Self {
-        Self {
-            data,
-            loc: Loc(0)..Loc(0),
-        }
-    }
-
+    /// Creates a new spanned data with the given location and data.
     pub fn new(loc: Range<Loc>, data: T) -> Self {
-        Self { data, loc }
-    }
-
-    pub fn map<U>(&self, fun: fn(&T) -> U) -> Spanned<U> {
-        Spanned {
-            data: fun(&self.data),
-            loc: self.loc.clone(),
-        }
-    }
-
-    pub fn with<U>(&self, data: U) -> Spanned<U> {
-        Spanned {
-            data,
-            loc: self.loc.clone(),
-        }
+        Self { data, range: loc }
     }
 }
 
@@ -54,11 +34,5 @@ impl AddAssign for Loc {
 impl From<Loc> for usize {
     fn from(loc: Loc) -> Self {
         loc.0
-    }
-}
-
-impl<T> From<T> for Spanned<T> {
-    fn from(value: T) -> Self {
-        Spanned::new(Loc(0)..Loc(0), value)
     }
 }

@@ -1,12 +1,14 @@
 //! This module does what is called 'closure conversion' it lifts all of the lambdas with closures
 //! to lambdas without closures.
 
+use std::ops::Range;
+
 use im_rc::HashMap;
 
-use crate::location::Spanned;
+use crate::location::{Loc, Spanned};
 
 use super::{
-    free::VarCollector,
+    free::{VarCollector, Vars},
     substitute::Substitutable,
     tree::{IsLifted, PrimKind, Symbol, Term, TermKind, VariableKind},
 };
@@ -15,6 +17,36 @@ use super::{
 pub struct BoundVars<'a> {
     vars: im_rc::HashMap<Symbol<'a>, usize>,
     count: usize,
+}
+
+impl<'a> BoundVars<'a> {
+    pub fn names(&self) -> Vars<'a> {
+        self.vars.iter().map(|x| x.0).cloned().collect()
+    }
+}
+
+fn create_new_ctx_vars<'a>(def: &mut super::tree::Definition<'a>) -> HashMap<Symbol<'a>, usize> {
+    def.parameters
+        .clone()
+        .into_iter()
+        .enumerate()
+        .map(|(x, y)| (y, x))
+        .collect()
+}
+
+fn create_get_env_subst<'a>(fv: &im_rc::HashSet<Symbol<'a>>) -> HashMap<Symbol<'a>, TermKind<'a>> {
+    fv.clone()
+        .into_iter()
+        .enumerate()
+        .map(|(n, m)| (m.clone(), TermKind::Prim(PrimKind::GetEnv(n, m.clone()))))
+        .collect()
+}
+
+fn create_local<'a>(x: Symbol<'a>, span: Range<Loc>, ctx: &BoundVars<'a>) -> Spanned<TermKind<'a>> {
+    Term::new(
+        span,
+        TermKind::Variable(VariableKind::Local(*ctx.vars.get(&x).unwrap(), x.clone())),
+    )
 }
 
 /// This trait is used to perform closure conversion.
@@ -140,13 +172,7 @@ impl<'a> ClosureConvert<'a> for Term<'a> {
                 val.closure_convert_help(bound_ctx);
             }
             TermKind::Lambda(def, mode) if *mode == IsLifted::No => {
-                let new_ctx: HashMap<_, _> = def
-                    .parameters
-                    .clone()
-                    .into_iter()
-                    .enumerate()
-                    .map(|(x, y)| (y, x))
-                    .collect();
+                let new_ctx: HashMap<_, _> = create_new_ctx_vars(def);
 
                 let new_ctx = BoundVars {
                     vars: new_ctx,
@@ -156,41 +182,25 @@ impl<'a> ClosureConvert<'a> for Term<'a> {
                 def.body.closure_convert_help(new_ctx.clone());
 
                 let mut fv = Default::default();
-                def.body
-                    .free_vars_helper(new_ctx.vars.iter().map(|x| x.0).cloned().collect(), &mut fv);
+                def.body.free_vars_helper(new_ctx.names(), &mut fv);
 
                 *mode = IsLifted::Yes;
 
                 if !fv.is_empty() {
-                    let subst = fv
-                        .clone()
-                        .into_iter()
-                        .enumerate()
-                        .map(|(n, m)| (m.clone(), TermKind::Prim(PrimKind::GetEnv(n, m.clone()))))
-                        .collect();
+                    let subst = create_get_env_subst(&fv);
 
                     def.body.substitute(subst);
 
                     let mut took = unsafe { std::mem::zeroed() };
                     std::mem::swap(&mut took, self);
-                    let span = took.loc.clone();
+                    let span = took.range.clone();
                     let new = TermKind::Prim(PrimKind::CreateClosure(
                         Box::new(took),
                         fv.into_iter()
-                            .map(|x| {
-                                (
-                                    x.clone(),
-                                    Term::new(
-                                        span.clone(),
-                                        TermKind::Variable(VariableKind::Local(
-                                            *bound_vars.vars.get(&x).unwrap(),
-                                            x.clone(),
-                                        )),
-                                    ),
-                                )
-                            })
+                            .map(|x| (x.clone(), create_local(x, span.clone(), &bound_vars)))
                             .collect(),
                     ));
+
                     *self = Spanned::new(span, new);
                 }
             }
@@ -201,14 +211,14 @@ impl<'a> ClosureConvert<'a> for Term<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::parser::parse;
     use crate::specialize::closure::ClosureConvert;
-    use crate::{parser::parse, specialize::specialize};
 
     #[test]
     pub fn it_works() {
         let code = "(lambda (x z) (lambda (y) (z x)))";
         let parsed = parse(code).unwrap();
-        let mut specialized = specialize(parsed[0].clone());
+        let mut specialized = parsed[0].specialize();
         println!("{}", specialized);
         specialized.closure_convert();
         println!("{}", specialized);

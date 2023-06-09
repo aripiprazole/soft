@@ -51,7 +51,7 @@ impl<'a> Expr<'a> {
     pub fn take(&mut self) -> Expr<'a> {
         let mut result = Spanned {
             data: ExprKind::List(vec![]),
-            loc: self.loc.clone(),
+            range: self.range.clone(),
         };
 
         std::mem::swap(self, &mut result);
@@ -68,9 +68,9 @@ impl<'a> Expr<'a> {
         }
     }
 
-    pub fn get_list(&self) -> Option<&[Expr<'a>]> {
+    pub fn get_list(self) -> Option<Vec<Expr<'a>>> {
         match self.data {
-            ExprKind::List(ref ls) => Some(ls),
+            ExprKind::List(ls) => Some(ls),
             _ => None,
         }
     }

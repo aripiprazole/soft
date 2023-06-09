@@ -1,4 +1,4 @@
-//! This module is used to perform substituion on terms.
+//! This module is used to perform substitution on terms.
 
 use im_rc::HashMap;
 

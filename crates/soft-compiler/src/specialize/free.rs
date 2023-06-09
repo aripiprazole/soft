@@ -148,16 +148,3 @@ impl<'a> VarCollector<'a> for TermKind<'a> {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::{parser::parse, specialize::specialize};
-
-    #[test]
-    pub fn it_works() {
-        let code = "(lambda (x) (y x z))";
-        let parsed = parse(code).unwrap();
-        let specialized = specialize(parsed[0].clone());
-        println!("{}", specialized);
-    }
-}

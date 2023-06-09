@@ -4,6 +4,7 @@
 //! defined in the runtime.
 
 pub mod cranelift;
+pub mod expr;
 pub mod llvm;
 pub mod location;
 pub mod mir;

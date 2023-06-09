@@ -1,6 +1,6 @@
 use std::{fmt::Display, hash::Hash};
 
-use crate::{location::Spanned, parser::syntax::Expr};
+use crate::{expr::Expr, location::Spanned};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum OperationKind {
@@ -237,7 +237,7 @@ pub enum TermKind<'a> {
 
     /// if!
     ///
-    /// A ternary conditional expression. If the scrutinee express a value of truth then it executes
+    /// A ternary conditional expression. If the scrutineer express a value of truth then it executes
     /// the first branch (the second argument on the variant), otherwise, it executes the second one
     /// (if the second one is None then it returns nil)
     If(Box<Term<'a>>, Box<Term<'a>>, Box<Term<'a>>),
@@ -349,8 +349,8 @@ impl<'a> Display for TermKind<'a> {
                 write!(f, ")")
             }
             TermKind::Quote(expr) => write!(f, "(quote! {})", expr),
-            TermKind::If(scrutinee, then, else_) => {
-                write!(f, "(if! {} {} {})", scrutinee, then, else_)
+            TermKind::If(scrutineer, then, else_) => {
+                write!(f, "(if! {} {} {})", scrutineer, then, else_)
             }
             TermKind::Operation(operation, args) => {
                 write!(f, "({}", operation)?;

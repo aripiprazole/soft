@@ -1,11 +1,11 @@
 //! This module specifies an s-expression into a more compiler-friendly tree. The step transforms an
-//! s-expression into a specialized tree and then runs a closure convertion algorithm on it.
+//! s-expression into a specialized tree and then runs a closure conversion algorithm on it.
 
 use std::ops::Range;
 
 use itertools::Itertools;
 
-use crate::{location::*, parser::syntax::*, specialize::tree::*};
+use crate::{expr::*, location::*, specialize::tree::*};
 
 pub mod closure;
 pub mod free;
@@ -25,7 +25,7 @@ pub struct Ctx<'a> {
 type Span = Range<Loc>;
 
 /// Expressions is a mutable slice of expressions
-type Exprs<'a, 'b> = &'b [Expr<'a>];
+type Exprs<'a, 'b> = Vec<Expr<'a>>;
 
 impl<'a> Ctx<'a> {
     /// Extends a context with a set of symbols
@@ -54,7 +54,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// Checks if the size of a list is equal to a given size
-    pub fn check_size(&self, args: Exprs<'a, '_>, size: usize) -> Option<()> {
+    pub fn check_size(&self, args: &Exprs<'a, '_>, size: usize) -> Option<()> {
         if args.len() != size {
             return None;
         }
@@ -62,10 +62,10 @@ impl<'a> Ctx<'a> {
         Some(())
     }
 
-    /// Specializes a sequence of exrpessions into a vector of terms
+    /// Specializes a sequence of expression into a vector of terms
     pub fn specialize_iter<'b, I>(&self, iter: I) -> Vec<Term<'a>>
     where
-        I: IntoIterator<Item = &'b Expr<'a>>,
+        I: IntoIterator<Item = Expr<'a>>,
         'a: 'b,
     {
         iter.into_iter().map(|x| self.specialize(x)).collect_vec()
@@ -102,32 +102,33 @@ impl<'a> Ctx<'a> {
     /// Specializes an operation expression into a term
     pub fn specialize_operation_expr(
         &self,
+        op: OperationKind,
         span: Span,
-        name: &str,
         args: Exprs<'a, '_>,
     ) -> Option<Term<'a>> {
-        let op = self.specialize_operation(name)?;
         let new_args = self.specialize_iter(args);
         Some(Term::new(span, TermKind::Operation(op, new_args)))
     }
 
     /// Specializes an if expression into a term
     pub fn specialize_if(&self, span: Span, args: Exprs<'a, '_>) -> Option<Term<'a>> {
-        self.check_size(args, 3)?;
+        self.check_size(&args, 3)?;
+
+        let mut iter = args.into_iter();
 
         Some(Term::new(
             span,
             TermKind::If(
-                Box::new(self.specialize(&args[0])),
-                Box::new(self.specialize(&args[1])),
-                Box::new(self.specialize(&args[2])),
+                Box::new(self.specialize(iter.next().unwrap())),
+                Box::new(self.specialize(iter.next().unwrap())),
+                Box::new(self.specialize(iter.next().unwrap())),
             ),
         ))
     }
 
     /// Specializes an expression into a quoted term
     pub fn specialize_quote(&self, span: Span, args: Exprs<'a, '_>) -> Option<Term<'a>> {
-        self.check_size(args, 1)?;
+        self.check_size(&args, 1)?;
         Some(Term::new(span, TermKind::Quote(Box::new(args[0].clone()))))
     }
 
@@ -137,7 +138,7 @@ impl<'a> Ctx<'a> {
     }
 
     /// Specializes a let expression with multiple binders into a term
-    pub fn specialize_let(&self, span: Span, args: Exprs<'a, '_>) -> Option<Term<'a>> {
+    pub fn specialize_let(&self, span: Span, mut args: Exprs<'a, '_>) -> Option<Term<'a>> {
         if args.is_empty() {
             return None;
         }
@@ -145,21 +146,23 @@ impl<'a> Ctx<'a> {
         let mut ctx = self.clone();
         let mut new_args = Vec::with_capacity(args.len() - 1);
 
-        let size = args.len();
+        let last = args.pop();
 
-        for arg in &args[0..size - 1] {
+        for arg in args {
             let list = arg.get_list()?;
-            self.check_size(list, 2)?;
+            self.check_size(&list, 2)?;
 
-            let name = Symbol::new(list[0].get_identifier()?);
-            let value = ctx.specialize(&list[1]);
+            let mut iter = list.into_iter();
+
+            let name = Symbol::new(iter.next().unwrap().get_identifier()?);
+            let value = ctx.specialize(iter.next().unwrap());
 
             new_args.push((name.clone(), value));
 
             ctx = self.add(name.clone());
         }
 
-        let next = Box::new(ctx.specialize(args.last()?));
+        let next = Box::new(ctx.specialize(last.unwrap()));
 
         Some(Term::new(span, TermKind::Let(new_args, next)))
     }
@@ -170,7 +173,9 @@ impl<'a> Ctx<'a> {
             return None;
         }
 
-        let params = args[0].get_list()?;
+        let mut iter = args.into_iter();
+
+        let params = iter.next().unwrap().get_list()?;
 
         let mut parameters = params
             .iter()
@@ -192,7 +197,7 @@ impl<'a> Ctx<'a> {
         let def = Definition {
             is_variadic,
             parameters,
-            body: Box::new(ctx.specialize(&args[1])),
+            body: Box::new(ctx.specialize(iter.next().unwrap())),
         };
 
         Some(Term::new(span, TermKind::Lambda(def, IsLifted::No)))
@@ -205,21 +210,26 @@ impl<'a> Ctx<'a> {
         args: Exprs<'a, '_>,
         is_macro: IsMacro,
     ) -> Option<Term<'a>> {
-        self.check_size(args, 2);
+        self.check_size(&args, 2);
 
-        let name = Symbol::new(args[0].get_identifier()?);
-        let value = self.specialize(&args[1]);
+        let cloned = args[1].clone();
+
+        let mut iter = args.into_iter();
+        let name = Symbol::new(iter.next().unwrap().get_identifier()?);
+        let value = self.specialize(iter.next().unwrap());
 
         Some(Term::new(
             span,
-            TermKind::Set(name, Box::new(args[1].clone()), Box::new(value), is_macro),
+            TermKind::Set(name, Box::new(cloned), Box::new(value), is_macro),
         ))
     }
 
-    /// Specializes a call expression into a term otherside it fallbacks to a cons-cell abstraction
+    /// Specializes a call expression into a term other side it fallbacks to a cons-cell abstraction
     fn specialize_call_expr(self, loc: Span, list: Exprs<'a, '_>) -> Term<'a> {
-        self.specialize_list(loc.clone(), list)
-            .unwrap_or_else(|| self.fallback_call(loc, list))
+        match self.specialize_list(loc.clone(), &list) {
+            Some(x) => x,
+            None => self.fallback_call(loc, list),
+        }
     }
 
     /// Specializes a local or global variable into a term
@@ -237,27 +247,34 @@ impl<'a> Ctx<'a> {
 
     /// Specializes a list with at least one argument into something more specific than a cons-cell
     /// abstraction.
-    pub fn specialize_list(&self, span: Span, args: Exprs<'a, '_>) -> Option<Term<'a>> {
-        let name = args[0].get_identifier()?;
-        self.specialize_call(span, name, &args[1..])
+    pub fn specialize_list(&self, span: Span, args: &Exprs<'a, '_>) -> Option<Term<'a>> {
+        let mut iter = args.iter();
+        let name = iter.next().unwrap().get_identifier()?;
+        self.specialize_call(span, name, iter.as_slice())
     }
 
-    pub fn specialize_call(&self, span: Span, name: &str, args: Exprs<'a, '_>) -> Option<Term<'a>> {
+    pub fn specialize_call(&self, span: Span, name: &str, args: &[Expr<'a>]) -> Option<Term<'a>> {
         match name {
-            "let" => self.specialize_let(span, args),
-            "lambda" => self.specialize_lambda(span, args),
-            "set!" => self.specialize_set(span, args, IsMacro::No),
-            "setm!" => self.specialize_set(span, args, IsMacro::Yes),
-            "block" => self.specialize_block(span, args),
-            "quote" => self.specialize_quote(span, args),
-            "if" => self.specialize_if(span, args),
-            _ => self.specialize_operation_expr(span, name, args),
+            "let" => self.specialize_let(span, args.to_vec()),
+            "lambda" => self.specialize_lambda(span, args.to_vec()),
+            "set!" => self.specialize_set(span, args.to_vec(), IsMacro::No),
+            "setm!" => self.specialize_set(span, args.to_vec(), IsMacro::Yes),
+            "block" => self.specialize_block(span, args.to_vec()),
+            "quote" => self.specialize_quote(span, args.to_vec()),
+            "if" => self.specialize_if(span, args.to_vec()),
+            _ => {
+                if let Some(name) = self.specialize_operation(name) {
+                    self.specialize_operation_expr(name, span, args.to_vec())
+                } else {
+                    None
+                }
+            }
         }
     }
 
     /// Creates a simple cons-cell call if it's not possible to specialize the call into something
     pub fn fallback_call(self, loc: Span, exprs: Exprs<'a, '_>) -> Term<'a> {
-        let mut iter = exprs.iter();
+        let mut iter = exprs.into_iter();
         let fun = self.clone().specialize(iter.next().unwrap());
         let args = iter.map(|x| self.clone().specialize(x));
 
@@ -265,25 +282,27 @@ impl<'a> Ctx<'a> {
     }
 
     /// Specializes an s-expression [Expr] into a [Term] that contains a more metadata.
-    pub fn specialize(&self, expr: &Expr<'a>) -> Term<'a> {
+    pub fn specialize(&self, expr: Expr<'a>) -> Term<'a> {
         use ExprKind::*;
 
-        let loc = expr.loc.clone();
+        let loc = expr.range.clone();
 
-        match &expr.data {
+        match expr.data {
             Identifier(name) => self.specialize_var(loc, name),
             List(list) if !list.is_empty() => self.clone().specialize_call_expr(loc, list),
             List(_) => Term::new(loc, TermKind::Prim(PrimKind::Nil)),
-            Number(num) => Term::new(loc, TermKind::Number(*num)),
+            Number(num) => Term::new(loc, TermKind::Number(num)),
             Atom(name) => Term::new(loc, TermKind::Atom(name)),
             String(str) => Term::new(loc, TermKind::String(str)),
         }
     }
 }
 
-/// Entry point for specialization. It gets a raw expression and turns it into a [Term] that contains
-/// more metadata is classified.
-pub fn specialize(expr: Expr) -> Term {
-    let state = Ctx::default();
-    state.specialize(&expr)
+impl<'a> Expr<'a> {
+    /// Entry point for specialization. It gets a raw expression and turns it into a [Term] that contains
+    /// more metadata is classified.
+    pub fn specialize(self) -> Term<'a> {
+        let state = Ctx::default();
+        state.specialize(self)
+    }
 }

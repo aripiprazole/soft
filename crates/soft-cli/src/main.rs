@@ -8,8 +8,8 @@
 
 use std::{env, process::exit};
 
+use soft_compiler::parser::parse;
 use soft_compiler::specialize::closure::ClosureConvert;
-use soft_compiler::{parser::parse, specialize::specialize};
 
 fn main() {
     // The CLI only takes one expression and then executes it. The first thing that you're going to
@@ -17,7 +17,7 @@ fn main() {
     match env::args().collect::<Vec<_>>().as_slice() {
         [_cwd, code] => {
             let parsed = parse(code).unwrap();
-            let mut specialized = specialize(parsed[0].clone());
+            let mut specialized = parsed[0].clone().specialize();
             specialized.closure_convert();
         }
         _ => {
