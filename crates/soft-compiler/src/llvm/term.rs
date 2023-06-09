@@ -31,7 +31,6 @@ impl<'guard> Codegen<'guard> {
             Call(callee, arguments) => self.mk_call(*callee, arguments),
             Operation(kind, operands) if operands.len() == 1 => self.unary(kind, operands),
             Operation(kind, operands) if operands.len() > 1 => self.binary(kind, operands),
-            Operation(_, _) => todo!(),
             Variable(VariableKind::Global(_)) => todo!(),
             String(value) => {
                 let value = self.builder.build_global_string_ptr(value, "const.string");
@@ -47,6 +46,7 @@ impl<'guard> Codegen<'guard> {
                     todo!()
                 }
             },
+            Operation(_, _) => unreachable!(),
         }
     }
 

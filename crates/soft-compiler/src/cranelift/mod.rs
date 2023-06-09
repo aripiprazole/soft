@@ -152,22 +152,3 @@ pub fn default_flags() -> Arc<dyn TargetIsa> {
         .finish(settings::Flags::new(flag_builder))
         .unwrap()
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::specialize::tree::TermKind;
-
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let mut codegen = Codegen::default();
-        let expr = TermKind::Number(10);
-
-        unsafe {
-            let f = codegen.main(expr.into()).unwrap();
-
-            println!("f() = {:?}", f());
-        }
-    }
-}

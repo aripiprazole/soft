@@ -209,6 +209,14 @@ impl<T: sealed::Scoped> ScopedPtr<T> {
 }
 
 impl<T: sealed::Complete> ScopedPtr<T> {
+    #[inline(always)]
+    pub fn new_u59(&self, data: T) -> Self
+    where
+        T: Into<u64>,
+    {
+        ScopedPtr(TaggedPtr::new_u59::<T>(data), Default::default())
+    }
+
     /// Gets the value of a complete ScopedPtr
     #[inline(always)]
     pub fn value(&self) -> T {
@@ -250,7 +258,37 @@ pub struct Reference {
     pub ptr: *mut libc::c_void,
 }
 
-impl sealed::Taggable for bool {
+#[derive(Debug)]
+pub struct Bool(pub bool);
+
+#[derive(Debug)]
+pub struct Char(pub char);
+
+impl From<u64> for Bool {
+    fn from(value: u64) -> Self {
+        Bool(value != 0)
+    }
+}
+
+impl From<u64> for Char {
+    fn from(value: u64) -> Self {
+        unsafe { Char(char::from_u32_unchecked(value as u32)) }
+    }
+}
+
+impl From<Bool> for u64 {
+    fn from(value: Bool) -> Self {
+        value.0 as u64
+    }
+}
+
+impl From<Char> for u64 {
+    fn from(value: Char) -> Self {
+        value.0 as u64
+    }
+}
+
+impl sealed::Taggable for Bool {
     const TAG: Tag = Tag::Boolean;
 }
 
@@ -278,6 +316,10 @@ impl Taggable for String {
     const TAG: Tag = Tag::String;
 }
 
+impl Taggable for Char {
+    const TAG: Tag = Tag::Char;
+}
+
 impl sealed::Scoped for Pair {}
 
 impl sealed::Scoped for Vector {}
@@ -290,12 +332,14 @@ impl sealed::Scoped for Reference {}
 
 impl sealed::Scoped for String {}
 
-impl sealed::Scoped for bool {}
+impl sealed::Complete for Bool {}
+
+impl sealed::Complete for Char {}
 
 // A sealed trait that is used internally.
 pub trait Scoped: sealed::Scoped {}
 
-// TODO: It probably leaks the inferface TwT
+// TODO: It probably leaks the interface TwT
 impl<T: sealed::Scoped> Scoped for T {}
 
 /// Existential ScopedPtr, it removes the tag from it but can be turned safely into one of the
@@ -339,6 +383,10 @@ impl TaggedPtr {
     #[inline(always)]
     pub fn alloc<T: Scoped>(data: T) -> TaggedPtr {
         TaggedPtr::new(crate::allocator::alloc(data))
+    }
+
+    pub fn new_u59<T: sealed::Complete + Into<u64>>(data: T) -> TaggedPtr {
+        TaggedPtr(data.into() << 5 | T::TAG as u64)
     }
 
     #[inline(always)]
@@ -411,8 +459,13 @@ impl TaggedPtr {
 
     #[inline(always)]
     pub fn assert<T: Taggable>(&self) -> ScopedPtr<T> {
-        self.convert()
-            .unwrap_or_else(|| panic!("[error] cannot convert it to {:?}", self.tag()))
+        self.convert().unwrap_or_else(|| {
+            panic!(
+                "[error] cannot convert '{:?}' to '{:?}'",
+                self.tag(),
+                T::TAG
+            )
+        })
     }
 }
 
@@ -454,7 +507,7 @@ impl From<TaggedPtr> for FatPtr {
 
 #[cfg(test)]
 mod tests {
-    use crate::ptr::U61;
+    use crate::ptr::{Bool, U61};
 
     use super::{FatPtr, Function, Pair, Reference, Symbol, Tag, TaggedPtr, Vector};
 
@@ -492,7 +545,9 @@ mod tests {
             ptr: (&function) as *const TaggedPtr as *mut libc::c_void,
         });
 
-        let tests: [Test; 6] = [
+        let bool = TaggedPtr::new_u59(Bool(false));
+
+        let tests: [Test; 7] = [
             (number, Tag::Integer, |x| matches!(x, FatPtr::Integer(_))),
             (pair, Tag::Pair, |x| matches!(x, FatPtr::Pair(_))),
             (function, Tag::Function, |x| {
@@ -501,6 +556,7 @@ mod tests {
             (vec, Tag::Vector, |x| matches!(x, FatPtr::Vector(_))),
             (symbol, Tag::Symbol, |x| matches!(x, FatPtr::Symbol(_))),
             (reference, Tag::Ref, |x| matches!(x, FatPtr::Ref(_))),
+            (bool, Tag::Boolean, |x| matches!(x, FatPtr::Boolean(_))),
         ];
 
         for (tagged, tag, fat_test) in tests {

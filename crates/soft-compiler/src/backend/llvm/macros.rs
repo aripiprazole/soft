@@ -7,22 +7,24 @@ macro_rules! llvm_type {
     };
     ($codegen:expr, ptr) => {
         $codegen
-            .ctx
+            .llvm_ctx
+            .context
             .i8_type()
             .ptr_type(inkwell::AddressSpace::default())
     };
     ($codegen:expr, bool) => {
-        $codegen.ctx.bool_type()
+        $codegen.llvm_ctx.context.bool_type()
     };
     ($codegen:expr, u8) => {
-        $codegen.ctx.i8_type()
+        $codegen.llvm_ctx.context.i8_type()
     };
     ($codegen:expr, u64) => {
-        $codegen.ctx.i64_type()
+        $codegen.llvm_ctx.context.i64_type()
     };
     ($codegen:expr, str) => {
         $codegen
-            .ctx
+            .llvm_ctx
+            .context
             .i8_type()
             .ptr_type(inkwell::AddressSpace::default())
     };
@@ -40,12 +42,12 @@ macro_rules! build_std_functions {
         $(,)?
     }) => {{
         $({
-            let f = $codegen.module.get_function(stringify!($name));
+            let f = $codegen.llvm_ctx.module.get_function(stringify!($name));
             if f.is_none() {
                 let name = stringify!($name);
-                let ret = $crate::llvm::macros::llvm_type!($codegen, $ret);
-                let args = &[$($crate::llvm::macros::llvm_type!($codegen, $x).into()),*];
-                $codegen.module.add_function(name, ret.fn_type(args, false), None);
+                let ret = $crate::backend::llvm::macros::llvm_type!($codegen, $ret);
+                let args = &[$($crate::backend::llvm::macros::llvm_type!($codegen, $x).into()),*];
+                $codegen.llvm_ctx.module.add_function(name, ret.fn_type(args, false), None);
             }
         })+
     }};
@@ -54,7 +56,7 @@ macro_rules! build_std_functions {
 macro_rules! register_jit_function {
     ($codegen:expr, $engine:expr, [$($name:expr),* $(,)?]) => {
         $({
-            let f = $codegen.module.get_function(stringify!($name)).unwrap();
+            let f = $codegen.llvm_ctx.module.get_function(stringify!($name)).unwrap();
             $engine.add_global_mapping(&f, $name as *mut libc::c_void as usize);
         })*
     };
@@ -64,9 +66,10 @@ macro_rules! std_function {
     ($name:ident($($argsn:ident), * $(,)?)) => {
         #[allow(clippy::needless_lifetimes)]
         #[allow(non_snake_case)]
+        #[inline(always)]
         pub fn $name(&self, $($argsn: inkwell::values::BasicValueEnum<'guard>),*) -> inkwell::values::BasicValueEnum<'guard> {
             let arguments = &[$($argsn.into()),*];
-            self.call(stringify!($name), arguments)
+            self.call_fun(stringify!($name), arguments)
         }
     };
 }

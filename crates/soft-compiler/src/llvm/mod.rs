@@ -28,8 +28,8 @@ pub struct Codegen<'guard> {
     pub fpm: LLVMPassManagerRef,
 
     //>>>Contextual stuff
-    /// The name stack stuff, everytime the program starts, it puts a name in the stack, `soft`, and
-    /// everytime a `Set` expression is handled, it's added here too.
+    /// The name stack stuff, every time the program starts, it puts a name in the stack, `soft`,
+    /// and every time a `Set` expression is handled, it's added here too.
     ///
     /// It does serves to set names to functions and variables for better debugging in the IR.
     ///
@@ -162,12 +162,9 @@ impl<'guard> Codegen<'guard> {
 #[cfg(test)]
 mod tests {
     use inkwell::{context::Context, OptimizationLevel};
-    use soft_runtime::ptr::TaggedPtr;
+    use soft_runtime::ptr::{Bool, TaggedPtr};
 
-    use crate::{
-        parser::parse,
-        specialize::{closure::ClosureConvert, specialize},
-    };
+    use crate::{parser::parse, specialize::closure::ClosureConvert};
 
     use super::Codegen;
 
@@ -178,8 +175,8 @@ mod tests {
         codegen.initialize_std_functions();
         codegen.setup_attributes();
 
-        let code = parse("((lambda (x) x) 42)").unwrap();
-        let mut code = specialize(code.first().unwrap().clone());
+        let code = parse("((lambda (x) x) true)").unwrap();
+        let mut code = code.first().unwrap().clone().specialize();
         code.closure_convert();
 
         let main = codegen.main("main", code);
@@ -205,7 +202,7 @@ mod tests {
                 .get_function::<unsafe extern "C" fn() -> TaggedPtr>(&main)
                 .unwrap_or_else(|_| panic!("Could not find the main function: {main}"));
 
-            println!("f.call() = {}", f.call().assert::<bool>().pointer());
+            println!("f.call() = {:?}", f.call().assert::<Bool>().value());
         }
     }
 }

@@ -169,7 +169,11 @@ impl<'a> Parser<'a> {
 
     fn parse_rpar(&mut self) -> Result {
         self.save_jump();
-        let index = self.indices.pop().unwrap();
+
+        let Some(index) = self.indices.pop() else {
+            return Err(ParseError::ExtraParenthesis);
+        };
+
         let stack = self.stack.split_off(index);
         let expr = Expr::new(self.tracker.pop_range(), ExprKind::List(stack));
         self.stack.push(expr);

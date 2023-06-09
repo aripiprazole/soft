@@ -8,17 +8,30 @@
 
 use std::{env, process::exit};
 
-use soft_compiler::parser::parse;
-use soft_compiler::specialize::closure::ClosureConvert;
+use soft_compiler::backend::llvm::codegen::Options;
+use soft_compiler::backend::Backend;
+use soft_compiler::backend::Runnable;
+
+use soft_compiler::{backend::llvm, parser::parse};
 
 fn main() {
     // The CLI only takes one expression and then executes it. The first thing that you're going to
     // use is probably an injection of a function that will be used to start the program.
     match env::args().collect::<Vec<_>>().as_slice() {
         [_cwd, code] => {
-            let parsed = parse(code).unwrap();
-            let mut specialized = parsed[0].clone().specialize();
-            specialized.closure_convert();
+            let parsed = parse(code).expect("oh no");
+
+            let mut terms: Vec<_> = parsed.into_iter().map(|x| x.to_term()).collect();
+
+            for term in &mut terms {
+                term.closure_convert();
+            }
+
+            let opt = Options::default();
+            let llvm = llvm::Context::new(&opt);
+            let result = llvm.compile(terms);
+
+            result.unwrap().run();
         }
         _ => {
             println!("[err] expected just one string to run.");

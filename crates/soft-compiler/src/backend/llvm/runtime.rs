@@ -4,13 +4,13 @@ use inkwell::execution_engine::ExecutionEngine;
 use inkwell::values::BasicMetadataValueEnum;
 use inkwell::values::BasicValueEnum;
 
+use super::codegen::CodeGen;
 use super::macros;
 use super::macros::std_function;
-use super::Codegen;
 
 use soft_runtime::internal::*;
 
-impl<'guard> Codegen<'guard> {
+impl<'guard> CodeGen<'guard> {
     /// Initialize the `internal` and the `standard-library` functions that are used by the compiler
     /// for compilation purposes.
     ///
@@ -79,7 +79,11 @@ impl<'guard> Codegen<'guard> {
         let align = self.attr_value("align", 8);
 
         {
-            let f = self.module.get_function(stringify!(soft_panic)).unwrap();
+            let f = self
+                .llvm_ctx
+                .module
+                .get_function(stringify!(soft_panic))
+                .unwrap();
             f.add_attribute(AttributeLoc::Function, noinline);
             f.add_attribute(AttributeLoc::Function, noreturn);
             f.add_attribute(AttributeLoc::Function, uwtable);
@@ -114,12 +118,12 @@ impl<'guard> Codegen<'guard> {
 
     pub fn attr(&self, name: &str) -> Attribute {
         let attr = Attribute::get_named_enum_kind_id(name);
-        self.ctx.create_enum_attribute(attr, 1)
+        self.llvm_ctx.context.create_enum_attribute(attr, 1)
     }
 
     pub fn attr_value(&self, name: &str, value: u64) -> Attribute {
         let attr = Attribute::get_named_enum_kind_id(name);
-        self.ctx.create_enum_attribute(attr, value)
+        self.llvm_ctx.context.create_enum_attribute(attr, value)
     }
 
     /// Call a function from the Soft runtime, that passes the context as the first argument.
@@ -139,9 +143,11 @@ impl<'guard> Codegen<'guard> {
         let mut complete_args: Vec<BasicMetadataValueEnum> = vec![];
         complete_args.extend_from_slice(args);
 
-        self.builder
+        self.llvm_ctx
+            .builder
             .build_direct_call(
-                self.module
+                self.llvm_ctx
+                    .module
                     .get_function(name)
                     .unwrap_or_else(|| panic!("Function {name} not found in module")),
                 complete_args.as_ref(),
@@ -153,13 +159,19 @@ impl<'guard> Codegen<'guard> {
     }
 
     /// Call a function a function that returns a [BasicValueEnum].
-    pub fn call(
+    pub fn call_fun(
         &self,
         name: &str,
         args: &[BasicMetadataValueEnum<'guard>],
     ) -> BasicValueEnum<'guard> {
-        self.builder
-            .build_direct_call(self.module.get_function(name).unwrap(), args.as_ref(), "")
+        println!("{:?}", name);
+        self.llvm_ctx
+            .builder
+            .build_direct_call(
+                self.llvm_ctx.module.get_function(name).unwrap(),
+                args.as_ref(),
+                "",
+            )
             .try_as_basic_value()
             .left()
             .unwrap_or_else(|| panic!("{} should return a BasicValueEnum", name))

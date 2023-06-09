@@ -1,308 +1,453 @@
 //! This module specifies an s-expression into a more compiler-friendly tree. The step transforms an
 //! s-expression into a specialized tree and then runs a closure conversion algorithm on it.
 
-use std::ops::Range;
+use crate::expr::{Expr, ExprKind};
 
-use itertools::Itertools;
-
-use crate::{expr::*, location::*, specialize::tree::*};
+use self::tree::*;
 
 pub mod closure;
-pub mod free;
-pub mod substitute;
 pub mod tree;
 
-/// The specialization context. It's used to keep track of local definitions in order to optimize
-/// it further on the future. Unbound variables are treated like variables that need to be searched
-/// on the context.
-#[derive(Clone, Default)]
-pub struct Ctx<'a> {
-    params: im_rc::HashMap<Symbol<'a>, usize>,
-    count: usize,
+#[derive(Default, Clone)]
+pub struct Ctx {
+    names: im_rc::HashMap<String, usize>,
+    counter: usize,
 }
 
-/// Type synonym to a range of locations
-type Span = Range<Loc>;
-
-/// Expressions is a mutable slice of expressions
-type Exprs<'a, 'b> = Vec<Expr<'a>>;
-
-impl<'a> Ctx<'a> {
-    /// Extends a context with a set of symbols
-    fn extend<I: IntoIterator<Item = Symbol<'a>>>(&self, iter: I) -> Ctx<'a> {
-        let mut clone = self.clone();
-
-        let params = iter
-            .into_iter()
-            .enumerate()
-            .map(|x| (x.1, x.0 + clone.count))
-            .collect::<Vec<_>>();
-
-        let size = params.len();
-
-        clone.params.extend(params.into_iter());
-        clone.count += size;
-        clone
+impl Ctx {
+    pub fn add(&mut self, name: String) -> usize {
+        let count = self.counter;
+        self.counter += 1;
+        self.names.insert(name, count);
+        count
     }
 
-    /// Add a symbol to the context
-    fn add(&self, name: Symbol<'a>) -> Ctx<'a> {
-        let mut new_ctx = self.clone();
-        new_ctx.params.insert(name, self.count);
-        new_ctx.count += 1;
-        new_ctx
-    }
-
-    /// Checks if the size of a list is equal to a given size
-    pub fn check_size(&self, args: &Exprs<'a, '_>, size: usize) -> Option<()> {
-        if args.len() != size {
-            return None;
-        }
-
-        Some(())
-    }
-
-    /// Specializes a sequence of expression into a vector of terms
-    pub fn specialize_iter<'b, I>(&self, iter: I) -> Vec<Term<'a>>
-    where
-        I: IntoIterator<Item = Expr<'a>>,
-        'a: 'b,
-    {
-        iter.into_iter().map(|x| self.specialize(x)).collect_vec()
-    }
-
-    /// Specializes the operation using the name of the function
-    pub fn specialize_operation(&self, name: &str) -> Option<OperationKind> {
-        use OperationKind::*;
-
-        match name {
-            "+" => Some(Add),
-            "-" => Some(Sub),
-            "*" => Some(Mul),
-            "/" => Some(Div),
-            "%" => Some(Mod),
-            "<<" => Some(Shl),
-            ">>" => Some(Shr),
-            "&" => Some(And),
-            "^" => Some(Xor),
-            "|" => Some(Or),
-            "!" => Some(Not),
-            "==" => Some(Eql),
-            "!=" => Some(Neq),
-            ">" => Some(Gtn),
-            ">=" => Some(Gte),
-            "<" => Some(Ltn),
-            "=<" => Some(Lte),
-            "&&" => Some(LAnd),
-            "||" => Some(LOr),
-            _ => None,
-        }
-    }
-
-    /// Specializes an operation expression into a term
-    pub fn specialize_operation_expr(
-        &self,
-        op: OperationKind,
-        span: Span,
-        args: Exprs<'a, '_>,
-    ) -> Option<Term<'a>> {
-        let new_args = self.specialize_iter(args);
-        Some(Term::new(span, TermKind::Operation(op, new_args)))
-    }
-
-    /// Specializes an if expression into a term
-    pub fn specialize_if(&self, span: Span, args: Exprs<'a, '_>) -> Option<Term<'a>> {
-        self.check_size(&args, 3)?;
-
-        let mut iter = args.into_iter();
-
-        Some(Term::new(
-            span,
-            TermKind::If(
-                Box::new(self.specialize(iter.next().unwrap())),
-                Box::new(self.specialize(iter.next().unwrap())),
-                Box::new(self.specialize(iter.next().unwrap())),
-            ),
-        ))
-    }
-
-    /// Specializes an expression into a quoted term
-    pub fn specialize_quote(&self, span: Span, args: Exprs<'a, '_>) -> Option<Term<'a>> {
-        self.check_size(&args, 1)?;
-        Some(Term::new(span, TermKind::Quote(Box::new(args[0].clone()))))
-    }
-
-    /// Specializes a sequence of operations (a block) into a term
-    pub fn specialize_block(&self, span: Span, args: Exprs<'a, '_>) -> Option<Term<'a>> {
-        Some(Term::new(span, TermKind::Block(self.specialize_iter(args))))
-    }
-
-    /// Specializes a let expression with multiple binders into a term
-    pub fn specialize_let(&self, span: Span, mut args: Exprs<'a, '_>) -> Option<Term<'a>> {
-        if args.is_empty() {
-            return None;
-        }
-
-        let mut ctx = self.clone();
-        let mut new_args = Vec::with_capacity(args.len() - 1);
-
-        let last = args.pop();
-
-        for arg in args {
-            let list = arg.get_list()?;
-            self.check_size(&list, 2)?;
-
-            let mut iter = list.into_iter();
-
-            let name = Symbol::new(iter.next().unwrap().get_identifier()?);
-            let value = ctx.specialize(iter.next().unwrap());
-
-            new_args.push((name.clone(), value));
-
-            ctx = self.add(name.clone());
-        }
-
-        let next = Box::new(ctx.specialize(last.unwrap()));
-
-        Some(Term::new(span, TermKind::Let(new_args, next)))
-    }
-
-    /// Specializes a lambda expression into a term
-    pub fn specialize_lambda(&self, span: Span, args: Exprs<'a, '_>) -> Option<Term<'a>> {
-        if args.len() != 2 {
-            return None;
-        }
-
-        let mut iter = args.into_iter();
-
-        let params = iter.next().unwrap().get_list()?;
-
-        let mut parameters = params
-            .iter()
-            .map(|x| x.get_identifier())
-            .map(|x| x.map(Symbol::new))
-            .collect::<Option<Vec<_>>>()?;
-
-        let mut is_variadic = false;
-
-        if let Some(res) = parameters.last_mut() {
-            if res.name().starts_with('&') {
-                *res = Symbol::new(&res.name()[1..]);
-                is_variadic = true;
-            }
-        }
-
-        let ctx = self.extend(parameters.iter().cloned());
-
-        let def = Definition {
-            is_variadic,
-            parameters,
-            body: Box::new(ctx.specialize(iter.next().unwrap())),
-        };
-
-        Some(Term::new(span, TermKind::Lambda(def, IsLifted::No)))
-    }
-
-    /// Specializes a set expression (that can be a macro and) into a term
-    pub fn specialize_set(
-        &self,
-        span: Span,
-        args: Exprs<'a, '_>,
-        is_macro: IsMacro,
-    ) -> Option<Term<'a>> {
-        self.check_size(&args, 2);
-
-        let cloned = args[1].clone();
-
-        let mut iter = args.into_iter();
-        let name = Symbol::new(iter.next().unwrap().get_identifier()?);
-        let value = self.specialize(iter.next().unwrap());
-
-        Some(Term::new(
-            span,
-            TermKind::Set(name, Box::new(cloned), Box::new(value), is_macro),
-        ))
-    }
-
-    /// Specializes a call expression into a term other side it fallbacks to a cons-cell abstraction
-    fn specialize_call_expr(self, loc: Span, list: Exprs<'a, '_>) -> Term<'a> {
-        match self.specialize_list(loc.clone(), &list) {
-            Some(x) => x,
-            None => self.fallback_call(loc, list),
-        }
-    }
-
-    /// Specializes a local or global variable into a term
-    fn specialize_var(&self, loc: Span, name: &'a str) -> Term<'a> {
-        let symbol = Symbol::new(name);
-
-        let var = if let Some(place) = self.params.get(&symbol) {
-            VariableKind::Local(*place, symbol)
-        } else {
-            VariableKind::Global(symbol)
-        };
-
-        Spanned::new(loc, TermKind::Variable(var))
-    }
-
-    /// Specializes a list with at least one argument into something more specific than a cons-cell
-    /// abstraction.
-    pub fn specialize_list(&self, span: Span, args: &Exprs<'a, '_>) -> Option<Term<'a>> {
-        let mut iter = args.iter();
-        let name = iter.next().unwrap().get_identifier()?;
-        self.specialize_call(span, name, iter.as_slice())
-    }
-
-    pub fn specialize_call(&self, span: Span, name: &str, args: &[Expr<'a>]) -> Option<Term<'a>> {
-        match name {
-            "let" => self.specialize_let(span, args.to_vec()),
-            "lambda" => self.specialize_lambda(span, args.to_vec()),
-            "set!" => self.specialize_set(span, args.to_vec(), IsMacro::No),
-            "setm!" => self.specialize_set(span, args.to_vec(), IsMacro::Yes),
-            "block" => self.specialize_block(span, args.to_vec()),
-            "quote" => self.specialize_quote(span, args.to_vec()),
-            "if" => self.specialize_if(span, args.to_vec()),
-            _ => {
-                if let Some(name) = self.specialize_operation(name) {
-                    self.specialize_operation_expr(name, span, args.to_vec())
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
-    /// Creates a simple cons-cell call if it's not possible to specialize the call into something
-    pub fn fallback_call(self, loc: Span, exprs: Exprs<'a, '_>) -> Term<'a> {
-        let mut iter = exprs.into_iter();
-        let fun = self.clone().specialize(iter.next().unwrap());
-        let args = iter.map(|x| self.clone().specialize(x));
-
-        Spanned::new(loc, TermKind::Call(Box::new(fun), args.collect()))
-    }
-
-    /// Specializes an s-expression [Expr] into a [Term] that contains a more metadata.
-    pub fn specialize(&self, expr: Expr<'a>) -> Term<'a> {
-        use ExprKind::*;
-
-        let loc = expr.range.clone();
-
-        match expr.data {
-            Identifier(name) => self.specialize_var(loc, name),
-            List(list) if !list.is_empty() => self.clone().specialize_call_expr(loc, list),
-            List(_) => Term::new(loc, TermKind::Prim(PrimKind::Nil)),
-            Number(num) => Term::new(loc, TermKind::Number(num)),
-            Atom(name) => Term::new(loc, TermKind::Atom(name)),
-            String(str) => Term::new(loc, TermKind::String(str)),
-        }
+    pub fn lookup(&self, name: &str) -> Option<usize> {
+        self.names.get(name).copied()
     }
 }
 
 impl<'a> Expr<'a> {
-    /// Entry point for specialization. It gets a raw expression and turns it into a [Term] that contains
-    /// more metadata is classified.
-    pub fn specialize(self) -> Term<'a> {
-        let state = Ctx::default();
-        state.specialize(self)
+    pub fn assert_size(&self, size: usize) -> Option<&[Self]> {
+        if let ExprKind::List(list) = &self.data {
+            if list.len() == size {
+                return Some(list);
+            }
+        }
+        None
+    }
+
+    pub fn at_least_size(&self, size: usize) -> Option<&[Self]> {
+        if let ExprKind::List(list) = &self.data {
+            if list.len() >= size {
+                return Some(list);
+            }
+        }
+        None
+    }
+
+    pub fn keyword(&self, keyword: &str) -> Option<()> {
+        if let ExprKind::Identifier(str) = self.data {
+            if str == keyword {
+                return Some(());
+            }
+        }
+        None
+    }
+
+    pub fn specialize<T: Specialize<'a>>(&self, ctx: Ctx) -> Option<T> {
+        T::specialize(self, ctx)
+    }
+
+    pub fn unspecialized_one_layer(&self, ctx: Ctx) -> Term<'a> {
+        match &self.data {
+            ExprKind::List(ls) => Self::fallback_call(ls, ctx),
+            ExprKind::Atom(atom) => Term::Atom(Atom {
+                name: Symbol::new(atom.to_string()),
+            }),
+            ExprKind::Identifier(id) => Term::Variable(Variable::Global {
+                name: Symbol::new(id.to_string()),
+            }),
+            ExprKind::Number(n) => Term::Number(Number { value: *n }),
+            ExprKind::String(s) => Term::Str(Str { value: s }),
+        }
+    }
+
+    pub fn specialize_fallback(&self, ctx: Ctx) -> Term<'a> {
+        self.specialize(ctx.clone())
+            .unwrap_or_else(|| Self::unspecialized_one_layer(self, ctx))
+    }
+
+    pub fn fallback_call(list: &[Expr<'a>], ctx: Ctx) -> Term<'a> {
+        let head = list[0].specialize_fallback(ctx.clone());
+        let mut tail = Vec::new();
+
+        for expr in list[1..].iter() {
+            tail.push(expr.specialize_fallback(ctx.clone()));
+        }
+
+        Term::Call(Call {
+            func: Box::new(head),
+            args: tail,
+        })
+    }
+
+    pub fn to_term(&self) -> Term<'a> {
+        Expr::specialize_fallback(self, Ctx::default())
+    }
+}
+
+pub trait Specialize<'a>: Into<Term<'a>> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self>;
+}
+
+impl<'a> Specialize<'a> for TypeOf<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.assert_size(2)?;
+        list[0].keyword("type-of")?;
+        Some(Self {
+            expr: Box::new(list[1].specialize(ctx)?),
+        })
+    }
+}
+
+impl<'a> Specialize<'a> for Vector<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.at_least_size(1)?;
+        list[0].keyword("vector")?;
+        Some(Self {
+            elements: list[1..]
+                .iter()
+                .map(|expr| expr.specialize(ctx.clone()))
+                .collect::<Option<_>>()?,
+        })
+    }
+}
+
+impl<'a> Specialize<'a> for Cons<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.assert_size(3)?;
+        list[0].keyword("cons")?;
+        Some(Self {
+            head: Box::new(list[1].specialize(ctx.clone())?),
+            tail: Box::new(list[2].specialize(ctx)?),
+        })
+    }
+}
+
+impl<'a> Specialize<'a> for Nil {
+    fn specialize(expr: &Expr<'a>, _: Ctx) -> Option<Self> {
+        let list = expr.assert_size(1)?;
+        list[0].keyword("nil")?;
+        Some(Self)
+    }
+}
+
+impl<'a> Specialize<'a> for Head<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.assert_size(2)?;
+        list[0].keyword("head")?;
+        Some(Self {
+            list: Box::new(list[1].specialize(ctx)?),
+        })
+    }
+}
+
+impl<'a> Specialize<'a> for Tail<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.assert_size(2)?;
+        list[0].keyword("tail")?;
+        Some(Self {
+            list: Box::new(list[1].specialize(ctx)?),
+        })
+    }
+}
+
+impl<'a> Specialize<'a> for IsNil<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.assert_size(2)?;
+        list[0].keyword("is-nil")?;
+        Some(Self {
+            list: Box::new(list[1].specialize(ctx)?),
+        })
+    }
+}
+
+impl<'a> Specialize<'a> for VectorIndex<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.assert_size(3)?;
+        list[0].keyword("vector-index")?;
+        Some(Self {
+            vector: Box::new(list[1].specialize(ctx.clone())?),
+            index: Box::new(list[2].specialize(ctx)?),
+        })
+    }
+}
+
+impl<'a> Specialize<'a> for VectorLen<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.assert_size(2)?;
+        list[0].keyword("vector-len")?;
+        Some(Self {
+            vector: Box::new(list[1].specialize(ctx)?),
+        })
+    }
+}
+
+impl<'a> Specialize<'a> for VectorPush<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.assert_size(3)?;
+        list[0].keyword("vector-push")?;
+        Some(Self {
+            vector: Box::new(list[1].specialize(ctx.clone())?),
+            element: Box::new(list[2].specialize(ctx)?),
+        })
+    }
+}
+
+impl<'a> Specialize<'a> for BoxTerm<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.assert_size(2)?;
+        list[0].keyword("box")?;
+        Some(Self {
+            term: Box::new(list[1].specialize(ctx)?),
+        })
+    }
+}
+
+impl<'a> Specialize<'a> for UnboxTerm<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.assert_size(2)?;
+        list[0].keyword("unbox")?;
+        Some(Self {
+            term: Box::new(list[1].specialize(ctx)?),
+        })
+    }
+}
+
+impl<'a> Specialize<'a> for CreateClosure<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.at_least_size(2)?;
+        list[0].keyword("create-closure")?;
+        let args = list[2..]
+            .iter()
+            .map(|expr| expr.specialize(ctx.clone()))
+            .collect::<Option<_>>()?;
+        let body = Box::new(list.last()?.specialize(ctx)?);
+        Some(Self { args, body })
+    }
+}
+
+impl<'a> Specialize<'a> for Binary<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.assert_size(4)?;
+
+        list[0].keyword("binary")?;
+
+        let op = match list[1].get_identifier()? {
+            "+" => OperationKind::Add,
+            "-" => OperationKind::Sub,
+            "*" => OperationKind::Mul,
+            "/" => OperationKind::Div,
+            "%" => OperationKind::Mod,
+            "<<" => OperationKind::Shl,
+            ">>" => OperationKind::Shr,
+            "&" => OperationKind::And,
+            "^" => OperationKind::Xor,
+            "|" => OperationKind::Or,
+            "!" => OperationKind::Not,
+            "==" => OperationKind::Eql,
+            "!=" => OperationKind::Neq,
+            ">" => OperationKind::Gtn,
+            ">=" => OperationKind::Gte,
+            "<" => OperationKind::Ltn,
+            "=<" => OperationKind::Lte,
+            "&&" => OperationKind::LAnd,
+            "||" => OperationKind::LOr,
+            _ => return None,
+        };
+
+        let left = Box::new(list[2].specialize(ctx.clone())?);
+        let right = Box::new(list[3].specialize(ctx)?);
+
+        Some(Self { op, left, right })
+    }
+}
+
+impl<'a> Specialize<'a> for Number {
+    fn specialize(expr: &Expr<'a>, _: Ctx) -> Option<Self> {
+        match expr.data {
+            ExprKind::Number(value) => Some(Self { value }),
+            _ => None,
+        }
+    }
+}
+
+impl<'a> Specialize<'a> for Str<'a> {
+    fn specialize(expr: &Expr<'a>, _: Ctx) -> Option<Self> {
+        match expr.data {
+            ExprKind::String(value) => Some(Self { value }),
+            _ => None,
+        }
+    }
+}
+
+impl<'a> Specialize<'a> for Bool {
+    fn specialize(expr: &Expr<'a>, _: Ctx) -> Option<Self> {
+        match expr.data {
+            ExprKind::Identifier("true") => Some(Self { value: true }),
+            ExprKind::Identifier("false") => Some(Self { value: false }),
+            _ => None,
+        }
+    }
+}
+
+impl<'a> Specialize<'a> for Variable {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        match expr.data {
+            ExprKind::Identifier(name) => {
+                if let Some(index) = ctx.lookup(name) {
+                    Some(Variable::Local {
+                        index,
+                        name: Symbol::new(name.to_string()),
+                    })
+                } else {
+                    Some(Variable::Global {
+                        name: Symbol::new(name.to_string()),
+                    })
+                }
+            }
+            _ => None,
+        }
+    }
+}
+
+impl<'a> Specialize<'a> for Let<'a> {
+    fn specialize(expr: &Expr<'a>, mut ctx: Ctx) -> Option<Self> {
+        let mut list = expr.at_least_size(3)?.to_vec();
+        list[0].keyword("let")?;
+        let mut bindings = Vec::new();
+        let last = list.pop().unwrap();
+        for binding in list[1..].iter() {
+            let list = binding.assert_size(2)?;
+            let name = Symbol::new(list[0].get_identifier()?.to_ascii_lowercase());
+            let term = list[1].specialize(ctx.clone())?;
+            ctx.add(name.name().to_string());
+            bindings.push((name, term));
+        }
+        let body = Box::new(last.specialize(ctx)?);
+        Some(Self { bindings, body })
+    }
+}
+
+impl<'a> Specialize<'a> for Lambda<'a> {
+    fn specialize(expr: &Expr<'a>, mut ctx: Ctx) -> Option<Self> {
+        let list = expr.assert_size(3)?;
+        list[0].keyword("lambda")?;
+
+        let args = list[1].at_least_size(0)?;
+        let mut new_args = Vec::new();
+
+        ctx.counter = 0;
+
+        for arg in args.iter() {
+            let name = Symbol::new(arg.get_identifier()?.to_string());
+            ctx.add(name.name().to_string());
+            new_args.push(name);
+        }
+
+        let body = Box::new(list.last()?.specialize(ctx)?);
+        Some(Self {
+            args: new_args,
+            body,
+        })
+    }
+}
+
+impl<'a> Specialize<'a> for Block<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.at_least_size(2)?;
+        list[0].keyword("block")?;
+
+        let mut body = Vec::new();
+
+        for expr in list[1..].iter() {
+            body.push(expr.specialize(ctx.clone())?);
+        }
+
+        Some(Self { body })
+    }
+}
+
+impl<'a> Specialize<'a> for Quote<'a> {
+    fn specialize(expr: &Expr<'a>, _: Ctx) -> Option<Self> {
+        let list = expr.assert_size(2)?;
+        list[0].keyword("quote")?;
+        let value = Box::new(list[1].clone());
+        Some(Self { value })
+    }
+}
+
+impl<'a> Specialize<'a> for If<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        let list = expr.assert_size(4)?;
+        list[0].keyword("if")?;
+        let cond = Box::new(list[1].specialize(ctx.clone())?);
+        let then = Box::new(list[2].specialize(ctx.clone())?);
+        let else_ = Box::new(list[3].specialize(ctx)?);
+        Some(Self { cond, then, else_ })
+    }
+}
+
+impl<'a> Specialize<'a> for Term<'a> {
+    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
+        match &expr.data {
+            ExprKind::List(list) => {
+                if list.is_empty() {
+                    Some(Self::Nil(Nil))
+                } else if let Some(name) = list[0].get_identifier() {
+                    match name {
+                        "vector" => Vector::specialize(expr, ctx).map(Self::Vector),
+                        "cons" => Cons::specialize(expr, ctx).map(Self::Cons),
+                        "nil" => Some(Self::Nil(Nil)),
+                        "head" => Head::specialize(expr, ctx).map(Self::Head),
+                        "tail" => Tail::specialize(expr, ctx).map(Self::Tail),
+                        "is-nil" => IsNil::specialize(expr, ctx).map(Self::IsNil),
+                        "vector-index" => VectorIndex::specialize(expr, ctx).map(Self::VectorIndex),
+                        "vector-len" => VectorLen::specialize(expr, ctx).map(Self::VectorLen),
+                        "vector-push" => VectorPush::specialize(expr, ctx).map(Self::VectorPush),
+                        "box" => BoxTerm::specialize(expr, ctx).map(Self::Box),
+                        "unbox" => UnboxTerm::specialize(expr, ctx).map(Self::Unbox),
+                        "new-clos" => CreateClosure::specialize(expr, ctx).map(Self::CreateClosure),
+                        "let" => Let::specialize(expr, ctx).map(Self::Let),
+                        "lambda" => Lambda::specialize(expr, ctx).map(Self::Lambda),
+                        "block" => Block::specialize(expr, ctx).map(Self::Block),
+                        "binary" => Binary::specialize(expr, ctx).map(Self::Binary),
+                        "quote" => Quote::specialize(expr, ctx).map(Self::Quote),
+                        "if" => If::specialize(expr, ctx).map(Self::If),
+                        _ => Some(Expr::fallback_call(list, ctx)),
+                    }
+                } else {
+                    Some(expr.unspecialized_one_layer(ctx))
+                }
+            }
+            ExprKind::Atom(n) => Some(Self::Atom(Atom {
+                name: Symbol::new(n.to_string()),
+            })),
+            ExprKind::Number(n) => Some(Self::Number(Number { value: *n })),
+            ExprKind::String(s) => Some(Self::Str(Str { value: s })),
+            ExprKind::Identifier(name) => {
+                if let Some(index) = ctx.lookup(name) {
+                    Some(Self::Variable(Variable::Local {
+                        index,
+                        name: Symbol::new(name.to_string()),
+                    }))
+                } else {
+                    Some(Self::Variable(Variable::Global {
+                        name: Symbol::new(name.to_string()),
+                    }))
+                }
+            }
+        }
     }
 }

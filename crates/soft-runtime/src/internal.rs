@@ -1,6 +1,6 @@
 use std::ffi::CStr;
 
-use crate::ptr::{Function, TaggedPtr};
+use crate::ptr::{Bool, Function, TaggedPtr};
 
 #[no_mangle]
 pub extern "C" fn prim__nil() -> TaggedPtr {
@@ -9,12 +9,12 @@ pub extern "C" fn prim__nil() -> TaggedPtr {
 
 #[no_mangle]
 pub extern "C" fn prim__true() -> TaggedPtr {
-    TaggedPtr::alloc(true)
+    TaggedPtr::new_u59(Bool(true))
 }
 
 #[no_mangle]
 pub extern "C" fn prim__false() -> TaggedPtr {
-    TaggedPtr::alloc(false)
+    TaggedPtr::new_u59(Bool(false))
 }
 
 #[no_mangle]
