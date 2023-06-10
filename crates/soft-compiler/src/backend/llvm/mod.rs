@@ -1,5 +1,7 @@
 //! This module creates a backend using the [CodeGen] structure.
 
+use crate::specialize::tree::Term;
+
 use self::codegen::{CodeGen, JitFunction};
 
 use super::Backend;
@@ -19,7 +21,7 @@ impl<'a> Backend<'a> for Context<'a> {
     type Object = JitFunction<'a>;
     type Config = codegen::Options;
 
-    fn compile(&'a self, terms: Vec<crate::specialize::tree::Term>) -> super::Result<Self::Object> {
+    fn compile(&'a self, terms: Vec<Term<'a>>) -> super::Result<Self::Object> {
         let mut code_gen = CodeGen::new(&self.ctx, self.config);
 
         code_gen.initialize_std_functions();

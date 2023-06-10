@@ -139,8 +139,9 @@ pub struct UnboxTerm<'a> {
 }
 
 #[derive(Debug)]
-pub struct CreateClosure<'a> {
-    pub args: Vec<Term<'a>>,
+pub struct Function<'a> {
+    pub env: Vec<Term<'a>>,
+    pub params: Vec<Symbol>,
     pub body: Box<Term<'a>>,
 }
 
@@ -223,7 +224,7 @@ pub enum Term<'a> {
     VectorPush(VectorPush<'a>),
     Box(BoxTerm<'a>),
     Unbox(UnboxTerm<'a>),
-    CreateClosure(CreateClosure<'a>),
+    CreateClosure(Function<'a>),
     Binary(Binary<'a>),
     Number(Number),
     Str(Str<'a>),
@@ -289,7 +290,7 @@ pub trait Visitor: Sized {
     fn visit_unbox(&mut self, unbox: &mut UnboxTerm) {
         unbox.walk(self);
     }
-    fn visit_create_closure(&mut self, create_closure: &mut CreateClosure) {
+    fn visit_create_closure(&mut self, create_closure: &mut Function) {
         create_closure.walk(self);
     }
 
@@ -419,10 +420,10 @@ impl<'a> UnboxTerm<'a> {
     }
 }
 
-impl<'a> CreateClosure<'a> {
+impl<'a> Function<'a> {
     pub fn walk(&mut self, visitor: &mut impl Visitor) {
         visitor.visit_term(&mut self.body);
-        for arg in &mut self.args {
+        for arg in &mut self.env {
             visitor.visit_term(arg);
         }
     }
@@ -605,8 +606,8 @@ impl<'a> From<UnboxTerm<'a>> for Term<'a> {
     }
 }
 
-impl<'a> From<CreateClosure<'a>> for Term<'a> {
-    fn from(create_closure: CreateClosure<'a>) -> Self {
+impl<'a> From<Function<'a>> for Term<'a> {
+    fn from(create_closure: Function<'a>) -> Self {
         Term::CreateClosure(create_closure)
     }
 }
@@ -777,7 +778,7 @@ impl<'a> Show for TypeOf<'a> {
     }
 }
 
-impl<'a> Show for Atom {
+impl Show for Atom {
     fn show(&self) -> SExpr {
         SExpr::label(&format!(":{}", self.name.debug_name))
     }
@@ -853,10 +854,11 @@ impl<'a> Show for UnboxTerm<'a> {
     }
 }
 
-impl<'a> Show for CreateClosure<'a> {
+impl<'a> Show for Function<'a> {
     fn show(&self) -> SExpr {
-        SExpr::label("create-closure")
-            .within(SExpr::List(self.args.iter().map(|a| a.show()).collect()))
+        SExpr::label("function")
+            .within(SExpr::List(self.env.iter().map(|a| a.show()).collect()))
+            .within(SExpr::List(self.params.iter().map(|a| a.show()).collect()))
             .with(&self.body)
     }
 }

@@ -224,20 +224,6 @@ impl<'a> Specialize<'a> for UnboxTerm<'a> {
         })
     }
 }
-
-impl<'a> Specialize<'a> for CreateClosure<'a> {
-    fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
-        let list = expr.at_least_size(2)?;
-        list[0].keyword("create-closure")?;
-        let args = list[2..]
-            .iter()
-            .map(|expr| expr.specialize(ctx.clone()))
-            .collect::<Option<_>>()?;
-        let body = Box::new(list.last()?.specialize(ctx)?);
-        Some(Self { args, body })
-    }
-}
-
 impl<'a> Specialize<'a> for Binary<'a> {
     fn specialize(expr: &Expr<'a>, ctx: Ctx) -> Option<Self> {
         let list = expr.assert_size(4)?;
@@ -418,7 +404,6 @@ impl<'a> Specialize<'a> for Term<'a> {
                         "vector-push" => VectorPush::specialize(expr, ctx).map(Self::VectorPush),
                         "box" => BoxTerm::specialize(expr, ctx).map(Self::Box),
                         "unbox" => UnboxTerm::specialize(expr, ctx).map(Self::Unbox),
-                        "new-clos" => CreateClosure::specialize(expr, ctx).map(Self::CreateClosure),
                         "let" => Let::specialize(expr, ctx).map(Self::Let),
                         "lambda" => Lambda::specialize(expr, ctx).map(Self::Lambda),
                         "block" => Block::specialize(expr, ctx).map(Self::Block),
@@ -436,18 +421,11 @@ impl<'a> Specialize<'a> for Term<'a> {
             })),
             ExprKind::Number(n) => Some(Self::Number(Number { value: *n })),
             ExprKind::String(s) => Some(Self::Str(Str { value: s })),
-            ExprKind::Identifier(name) => {
-                if let Some(index) = ctx.lookup(name) {
-                    Some(Self::Variable(Variable::Local {
-                        index,
-                        name: Symbol::new(name.to_string()),
-                    }))
-                } else {
-                    Some(Self::Variable(Variable::Global {
-                        name: Symbol::new(name.to_string()),
-                    }))
-                }
-            }
+            ExprKind::Identifier(name) => match *name {
+                "true" => Some(Self::Bool(Bool { value: true })),
+                "false" => Some(Self::Bool(Bool { value: false })),
+                _ => expr.specialize(ctx).map(Self::Variable),
+            },
         }
     }
 }

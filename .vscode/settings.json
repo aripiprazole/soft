@@ -1,0 +1,9 @@
+{
+    "cSpell.words": [
+        "setm"
+    ],
+    "rust-analyzer.linkedProjects": [
+        "./crates/soft-compiler/Cargo.toml"
+    ],
+    "rust-analyzer.showUnlinkedFileNotification": false
+}

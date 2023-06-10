@@ -3,7 +3,7 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use super::tree::{CreateClosure, Let, Symbol, Term, Variable, Visitor};
+use super::tree::{Function, Let, Number, Symbol, Term, Variable, Visitor};
 
 #[derive(Default, Clone)]
 pub struct Ctx {
@@ -55,17 +55,15 @@ impl Visitor for Ctx {
                     acc
                 });
 
+                let args = lambda.args.clone();
                 ctx.visit_term(&mut lambda.body);
-
-                let mut unit = unsafe { std::mem::zeroed() };
-                std::mem::swap(&mut unit, expr);
 
                 let fv = ctx.free_vars.borrow();
                 let mut fv = fv.clone().into_iter().collect::<Vec<_>>();
 
                 fv.sort_by(|a, b| a.1.cmp(&b.1));
 
-                let mut args = vec![];
+                let mut env = vec![];
 
                 for (var, _) in fv {
                     let mut var = Variable::Local {
@@ -73,12 +71,16 @@ impl Visitor for Ctx {
                         name: Symbol::new(var),
                     };
                     self.visit_variable(&mut var);
-                    args.push(Term::Variable(var));
+                    env.push(Term::Variable(var));
                 }
 
-                *expr = Term::CreateClosure(CreateClosure {
-                    args,
-                    body: Box::new(unit),
+                let mut t = Box::new(Term::Number(Number { value: 0 }));
+                std::mem::swap(&mut lambda.body, &mut t);
+
+                *expr = Term::CreateClosure(Function {
+                    env,
+                    params: args,
+                    body: t,
                 })
             }
             _ => expr.walk(self),

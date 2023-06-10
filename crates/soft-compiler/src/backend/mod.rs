@@ -26,5 +26,5 @@ pub trait Backend<'a> {
     type Config;
 
     fn new(config: &'a Self::Config) -> Self;
-    fn compile(&'a self, terms: Vec<Term>) -> Result<Self::Object>;
+    fn compile(&'a self, terms: Vec<Term<'a>>) -> Result<Self::Object>;
 }

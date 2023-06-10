@@ -13,6 +13,7 @@ use inkwell::types::FunctionType;
 use inkwell::values::AsValueRef;
 use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
+use inkwell::AddressSpace;
 use inkwell::OptimizationLevel;
 
 use llvm_sys::core::*;
@@ -192,15 +193,15 @@ pub struct FunctionContext<'a> {
 }
 
 impl<'a> FunctionContext<'a> {
-    fn push_name(&mut self, name: &str) {
+    pub fn push_name(&mut self, name: &str) {
         self.name_stack.push(name.to_string());
     }
 
-    fn basic_block(&self) -> inkwell::basic_block::BasicBlock<'a> {
+    pub fn basic_block(&self) -> inkwell::basic_block::BasicBlock<'a> {
         self.basic_block.unwrap()
     }
 
-    fn set_basic_block(&mut self, basic_block: inkwell::basic_block::BasicBlock<'a>) {
+    pub fn set_basic_block(&mut self, basic_block: inkwell::basic_block::BasicBlock<'a>) {
         self.basic_block = Some(basic_block);
     }
 }
@@ -210,14 +211,28 @@ pub struct CodeGen<'a> {
     pub llvm_ctx: LowLevelContext<'a>,
     pub function_ctx: FunctionContext<'a>,
     pub options: &'a Options,
+
+    pub i64: inkwell::types::IntType<'a>,
+    pub i8: inkwell::types::IntType<'a>,
+    pub ptr: inkwell::types::PointerType<'a>,
 }
 
 impl<'a> CodeGen<'a> {
     pub fn new(context: &'a inkwell::context::Context, options: &'a Options) -> Self {
+        let llvm_ctx = LowLevelContext::new(context);
         Self {
-            llvm_ctx: LowLevelContext::new(context),
+            i64: llvm_ctx.context.i64_type(),
+            ptr: llvm_ctx.context.i8_type().ptr_type(AddressSpace::default()),
+            i8: llvm_ctx.context.i8_type(),
             function_ctx: FunctionContext::default(),
             options,
+            llvm_ctx,
+        }
+    }
+
+    pub fn run_passes(&self, f: FunctionValue) {
+        unsafe {
+            LLVMRunFunctionPassManager(self.llvm_ctx.pass_manager, f.as_value_ref());
         }
     }
 

@@ -164,7 +164,6 @@ impl<'guard> CodeGen<'guard> {
         name: &str,
         args: &[BasicMetadataValueEnum<'guard>],
     ) -> BasicValueEnum<'guard> {
-        println!("{:?}", name);
         self.llvm_ctx
             .builder
             .build_direct_call(

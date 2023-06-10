@@ -11,6 +11,7 @@ use std::{env, process::exit};
 use soft_compiler::backend::llvm::codegen::Options;
 use soft_compiler::backend::Backend;
 use soft_compiler::backend::Runnable;
+use soft_compiler::specialize::tree::Show;
 
 use soft_compiler::{backend::llvm, parser::parse};
 
@@ -25,6 +26,7 @@ fn main() {
 
             for term in &mut terms {
                 term.closure_convert();
+                println!("{}", term.show())
             }
 
             let opt = Options::default();
