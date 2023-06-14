@@ -1,9 +1,0 @@
-[workspace]
-
-members = [
-    "crates/soft-runtime",
-    "crates/soft-cli",
-    "crates/soft-compiler",
-]
-
-resolver = "1"
