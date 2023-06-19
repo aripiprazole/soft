@@ -3,6 +3,7 @@
 
 use crate::*;
 
+/// (defn call* (name))
 pub fn call(scope: CallScope<'_>) -> Result<Value> {
     scope.assert_arity(1)?;
 
@@ -10,12 +11,22 @@ pub fn call(scope: CallScope<'_>) -> Result<Value> {
     let name = arg.assert_identifier()?;
 
     if let Some(res) = scope.env.get(&name) {
-        Ok(res)
-    } else {
+        if scope.env.mode == Mode::Macro && scope.env.frames[0].is_macro.contains(&name) {
+            scope.env.expanded = true;
+            Ok(res)
+        } else if scope.env.mode == Mode::Eval {
+            Ok(res)
+        } else {
+            Ok(arg)
+        }
+    } else if scope.env.mode == Mode::Eval {
         Err(RuntimeError::UndefinedName(name))
+    } else {
+        Ok(arg)
     }
 }
 
+/// (defn set* (name value))
 pub fn set(scope: CallScope<'_>) -> Result<Value> {
     scope.assert_arity(2)?;
 
@@ -26,6 +37,17 @@ pub fn set(scope: CallScope<'_>) -> Result<Value> {
     scope.ok(Expr::Nil)
 }
 
+pub fn setm(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_arity(1)?;
+
+    let name = scope.at(0).assert_identifier()?;
+
+    scope.env.frames[0].is_macro.insert(name);
+
+    scope.ok(Expr::Nil)
+}
+
+/// (defn lambda* (params value))
 pub fn lambda(scope: CallScope<'_>) -> Result<Value> {
     scope.assert_arity(2)?;
 
@@ -49,6 +71,7 @@ pub fn lambda(scope: CallScope<'_>) -> Result<Value> {
     })
 }
 
+/// (defn let* (name value))
 pub fn let_(scope: CallScope<'_>) -> Result<Value> {
     scope.assert_arity(2)?;
 
@@ -60,6 +83,7 @@ pub fn let_(scope: CallScope<'_>) -> Result<Value> {
     scope.ok(Expr::Nil)
 }
 
+/// (defn + (x, args..))
 pub fn add(scope: CallScope<'_>) -> Result<Value> {
     let mut result = 0;
 
@@ -71,6 +95,58 @@ pub fn add(scope: CallScope<'_>) -> Result<Value> {
     scope.ok(Expr::Int(result))
 }
 
+/// (defn - (x, args..))
+pub fn sub(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_at_least(1)?;
+
+    let mut result = scope.at(0).assert_number()?;
+
+    for arg in scope.args.iter().skip(1) {
+        let arg = arg.eval(scope.env)?.assert_number()?;
+        result -= arg;
+    }
+
+    scope.ok(Expr::Int(result))
+}
+
+/// (defn * (x, args..))
+pub fn mul(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_at_least(1)?;
+
+    let mut result = scope.at(0).assert_number()?;
+
+    for arg in scope.args.iter().skip(1) {
+        let arg = arg.eval(scope.env)?.assert_number()?;
+        result *= arg;
+    }
+
+    scope.ok(Expr::Int(result))
+}
+
+/// (defn len (indexable))
+pub fn len(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).eval(scope.env)?;
+
+    scope.ok(match &*value.clone().expr() {
+        Expr::Cons(..) => Expr::Int(Expr::spine(value).unwrap_or_default().len() as u64),
+        Expr::Vector(vector) => Expr::Int(vector.len() as u64),
+        Expr::Str(string) => Expr::Int(string.len() as u64),
+        _ => return Err(RuntimeError::ExpectedList),
+    })
+}
+
+/// (defn expand (value))
+pub fn expand(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).eval(scope.env)?;
+
+    Ok(value)
+}
+
+/// (defn ' (value))
 pub fn quote(scope: CallScope<'_>) -> Result<Value> {
     scope.assert_arity(1)?;
     Ok(scope.at(0))

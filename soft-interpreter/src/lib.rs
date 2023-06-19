@@ -23,7 +23,7 @@
 pub mod intrinsics;
 
 use std::{
-    cell::RefCell,
+    cell::{Ref, RefCell},
     fmt::{Debug, Display},
     iter::Peekable,
     panic::Location,
@@ -69,6 +69,12 @@ pub enum RuntimeError {
 
     #[error("expected a number")]
     ExpectedNumber,
+
+    #[error("invalid escape")]
+    InvalidEscape,
+
+    #[error("unterminated string")]
+    UnterminatedString,
 }
 
 /// A "stack frame" it stores variables in the stack and it is always a copy of the last one.
@@ -77,6 +83,7 @@ pub struct Frame {
     pub name: String,
     pub located_at: Meta,
     pub variables: im_rc::HashMap<String, Value, fxhash::FxBuildHasher>,
+    pub is_macro: im_rc::HashSet<String, fxhash::FxBuildHasher>,
     pub catch: bool,
 }
 
@@ -92,9 +99,16 @@ impl Frame {
                 file,
             }),
             variables: Default::default(),
+            is_macro: Default::default(),
             catch: true,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Mode {
+    Eval,
+    Macro,
 }
 
 /// The environment of the interpreter. It contains a stack of frames that are used to store the
@@ -102,21 +116,33 @@ impl Frame {
 #[derive(Debug, Clone)]
 pub struct Environment {
     pub frames: im_rc::Vector<Frame>,
+    pub expanded: bool,
+    pub mode: Mode,
 }
 
 impl Environment {
     pub fn new(path: Option<PathBuf>) -> Environment {
         Environment {
             frames: im_rc::vector![Frame::root(path)],
+            expanded: false,
+            mode: Mode::Macro,
         }
+    }
+
+    pub fn to_eval(&mut self) {
+        self.mode = Mode::Eval;
     }
 
     pub fn register_intrinsics(&mut self) {
         self.intrinsic("call", crate::intrinsics::call);
-        self.intrinsic("set", crate::intrinsics::set);
+        self.intrinsic("set*", crate::intrinsics::set);
+        self.intrinsic("setm*", crate::intrinsics::setm);
         self.intrinsic("lambda*", crate::intrinsics::lambda);
         self.intrinsic("let*", crate::intrinsics::let_);
         self.intrinsic("+", crate::intrinsics::add);
+        self.intrinsic("-", crate::intrinsics::sub);
+        self.intrinsic("*", crate::intrinsics::mul);
+        self.intrinsic("len", crate::intrinsics::len);
     }
 
     /// Gets the last stack frame.
@@ -173,6 +199,7 @@ impl Environment {
             name,
             located_at: Meta::Intrinsic,
             variables: self.last_stack().variables.clone(),
+            is_macro: self.last_stack().is_macro.clone(),
             catch: false,
         };
         self.frames.push_back(frame);
@@ -227,8 +254,14 @@ impl Environment {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Value(Rc<RefCell<Expr>>, Meta);
+
+impl Debug for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Value({:#?})", self.0.borrow())
+    }
+}
 
 impl Value {
     pub fn location(&self) -> Option<Meta> {
@@ -237,6 +270,11 @@ impl Value {
             _ => None,
         }
     }
+
+    pub fn expr(&self) -> Ref<'_, Expr> {
+        self.0.borrow()
+    }
+
     /// Compare two simple values by value and others by reference.
     pub fn compare(&self, other: &Value) -> bool {
         match (&*self.0.borrow(), &*other.0.borrow()) {
@@ -249,32 +287,26 @@ impl Value {
     }
 
     pub fn assert_size(&self, size: usize) -> Result<Vec<Value>> {
-        match &*self.0.borrow() {
-            Expr::Cons(..) => {
-                let spine = Expr::spine(self.clone());
-                if let Some(spine) = spine {
-                    if spine.len() == size {
-                        return Ok(spine);
-                    }
-                    return Err(RuntimeError::WrongArity(spine.len(), size));
+        if let Expr::Cons(..) = &*self.0.borrow() {
+            let spine = Expr::spine(self.clone());
+            if let Some(spine) = spine {
+                if spine.len() == size {
+                    return Ok(spine);
                 }
+                return Err(RuntimeError::WrongArity(spine.len(), size));
             }
-            _ => (),
         }
         Err(RuntimeError::WrongArity(size, 1))
     }
 
     pub fn at_least(&self, size: usize) -> Result<Vec<Value>> {
-        match &*self.0.borrow() {
-            Expr::Cons(..) => {
-                if let Some(spine) = Expr::spine(self.clone()) {
-                    if spine.len() >= size {
-                        return Ok(spine);
-                    }
-                    return Err(RuntimeError::WrongArity(spine.len(), size));
+        if let Expr::Cons(..) = &*self.0.borrow() {
+            if let Some(spine) = Expr::spine(self.clone()) {
+                if spine.len() >= size {
+                    return Ok(spine);
                 }
+                return Err(RuntimeError::WrongArity(spine.len(), size));
             }
-            _ => (),
         }
         Err(RuntimeError::WrongArity(size, 1))
     }
@@ -558,20 +590,32 @@ pub trait Eval {
     fn eval(&self, env: &mut Environment) -> Result<Value>;
 }
 
-pub struct Application<'a>(Value, &'a [Value]);
+pub struct Application<'a>(Value, Value, &'a [Value]);
 
 impl<'a> Eval for Application<'a> {
     fn eval(&self, env: &mut Environment) -> Result<Value> {
-        let head_val = self.0.eval(env)?;
-        let head_val = head_val.0.borrow();
+        let value = self.1.eval(env)?;
+        let head = value.0.borrow();
 
-        let func: &dyn Function = match &*head_val {
+        let func: &dyn Function = match &*head {
             Expr::Extern(ext) => ext,
             Expr::Closure(val) => val,
+            _ if env.mode == Mode::Macro => {
+                let mut args = self.2.to_vec();
+                args.insert(0, value.clone());
+
+                let value = args
+                    .into_iter()
+                    .try_rfold(Expr::Nil.to_value(), |next, acc| {
+                        Ok(Expr::Cons(acc, next).to_value())
+                    })?;
+
+                return Ok(value);
+            }
             _ => return Err(RuntimeError::NotCallable),
         };
 
-        func.call(env, self.1.to_vec())
+        func.call(env, self.2.to_vec())
     }
 }
 
@@ -582,19 +626,19 @@ impl Eval for Value {
         }
 
         match &*self.0.borrow() {
-            Expr::Cons(_, _) => {
+            Expr::Cons(..) => {
                 let spine = Expr::spine(self.clone());
                 if let Some(spine) = spine {
                     let head = spine.first().unwrap();
                     let tail = &spine[1..];
-                    Application(head.clone(), tail).eval(env)
+                    Application(self.clone(), head.clone(), tail).eval(env)
                 } else {
                     Ok(self.clone())
                 }
             }
-            Expr::Identifier(_) => {
+            Expr::Identifier(..) => {
                 let call = env.get("call").unwrap();
-                Application(call, &[self.clone()]).eval(env)
+                Application(self.clone(), call, &[self.clone()]).eval(env)
             }
             _ => Ok(self.clone()),
         }
@@ -647,6 +691,33 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
                     return Err(RuntimeError::UnmatchedParenthesis);
                 }
             }
+            '"' => {
+                let mut string = String::new();
+
+                while let Some(chr) = peekable.next() {
+                    match chr {
+                        '"' => break,
+                        '\\' => {
+                            let chr = peekable.next().unwrap();
+                            match chr {
+                                'n' => string.push('\n'),
+                                't' => string.push('\t'),
+                                'r' => string.push('\r'),
+                                '\\' => string.push('\\'),
+                                '"' => string.push('"'),
+                                _ => return Err(RuntimeError::InvalidEscape),
+                            }
+                        }
+                        chr => string.push(chr),
+                    }
+                }
+
+                if peekable.peek().is_none() {
+                    return Err(RuntimeError::UnterminatedString);
+                }
+
+                stack.push(Expr::Str(string).to_meta_value(Meta::Location(place)));
+            }
             '0'..='9' => {
                 let mut num = chr as u64 - '0' as u64;
 
@@ -665,7 +736,7 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
                 let mut symbol = chr.to_string();
 
                 while let Some(chr) = peekable.peek() {
-                    if matches!(chr, '(' | ')' | '\n' | '\t' | '\r' | ' ') {
+                    if matches!(chr, '(' | ')' | '\n' | '\t' | '\r' | ' ' | '"') {
                         break;
                     }
                     symbol.push(peekable.next().unwrap());
