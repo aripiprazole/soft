@@ -55,6 +55,12 @@ pub enum RuntimeError {
 
     #[error("unmatched quote")]
     UnmatchedQuote,
+
+    #[error("wrong arity, expected {0} arguments, got {1}")]
+    WrongArity(usize, usize),
+
+    #[error("expected an identifier")]
+    ExpectedIdentifier,
 }
 
 /// A "stack frame" it stores variables in the stack and it is always a copy of the last one.
@@ -90,11 +96,9 @@ pub struct Environment {
 
 impl Environment {
     pub fn new(path: Option<PathBuf>) -> Environment {
-        let mut env = Environment {
+        Environment {
             frames: im_rc::vector![Frame::root(path)],
-        };
-        env.push_stack("root".into());
-        env
+        }
     }
 
     /// Gets the last stack frame.
@@ -186,6 +190,41 @@ impl Value {
             (Expr::Meta(_, n), _) => n.compare(self),
             (_, Expr::Meta(_, n)) => self.compare(n),
             (a, b) => std::ptr::eq(a, b),
+        }
+    }
+
+    pub fn assert_size(&self, size: usize) -> Result<Vec<Value>> {
+        match &*self.0.borrow() {
+            Expr::Cons(..) => {
+                let spine = Expr::spine(self.clone());
+                if spine.len() == size {
+                    Ok(spine)
+                } else {
+                    Err(RuntimeError::WrongArity(spine.len(), size))
+                }
+            }
+            _ => Err(RuntimeError::WrongArity(size, 1)),
+        }
+    }
+
+    pub fn at_least(&self, size: usize) -> Result<Vec<Value>> {
+        match &*self.0.borrow() {
+            Expr::Cons(..) => {
+                let spine = Expr::spine(self.clone());
+                if spine.len() >= size {
+                    Ok(spine)
+                } else {
+                    Err(RuntimeError::WrongArity(spine.len(), size))
+                }
+            }
+            _ => Err(RuntimeError::WrongArity(size, 1)),
+        }
+    }
+
+    pub fn assert_identifier(&self) -> Result<String> {
+        match &*self.0.borrow() {
+            Expr::Identifier(name) => Ok(name.clone()),
+            _ => Err(RuntimeError::ExpectedIdentifier),
         }
     }
 }
@@ -343,9 +382,9 @@ impl Function for Extern {
         let frame = env.push_stack(self.name.to_string());
         frame.located_at = Meta::Extern(self.name, self.location);
         let scope = CallScope { args, env };
-        let value = (self.call)(scope);
+        let value = (self.call)(scope)?;
         env.pop_stack();
-        value
+        Ok(value)
     }
 }
 
@@ -364,6 +403,22 @@ impl CallScope<'_> {
 
     pub fn value(&self, expr: Expr) -> Value {
         Value(Rc::new(RefCell::new(expr)))
+    }
+
+    pub fn assert_size(&self, size: usize) -> Result<()> {
+        if self.args.len() != size {
+            Err(RuntimeError::WrongArity(size, self.args.len()))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn assert_at_least(&self, size: usize) -> Result<()> {
+        if self.args.len() < size {
+            Err(RuntimeError::WrongArity(size, self.args.len()))
+        } else {
+            Ok(())
+        }
     }
 
     pub fn ok(&self, expr: Expr) -> Result<Value> {
@@ -413,6 +468,7 @@ impl Eval for Value {
     }
 }
 
+/// Parses a source code at vector of values.
 pub fn parse(code: &str) -> Result<Vec<Value>> {
     let mut peekable = code.chars().peekable();
     let mut stack = vec![];

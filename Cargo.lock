@@ -84,7 +84,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "soft-interpreter"
+name = "soft"
 version = "0.0.1"
 dependencies = [
  "fxhash",
