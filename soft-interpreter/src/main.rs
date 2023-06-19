@@ -1,9 +1,9 @@
 use soft::Eval;
-use soft::{intrinsics, parse, Environment};
+use soft::{parse, Environment};
 
 fn main() {
-    let mut environment = Environment::new(None);
-    environment.extend("call", intrinsics::call);
+    let mut env = Environment::new(None);
+    env.register_intrinsics();
 
     let args = std::env::args().skip(1).collect::<Vec<_>>();
 
@@ -18,13 +18,12 @@ fn main() {
     };
 
     for expr in parse(&file, Some(args[0].clone().into())).unwrap() {
-        match expr.eval(&mut environment) {
+        match expr.eval(&mut env) {
             Ok(value) => println!("=> {}", value),
             Err(err) => {
-                eprintln!("{}", expr);
                 eprintln!("error: {err}");
-                eprintln!("  at {}", environment.find_first_location());
-                environment.unwind();
+                eprintln!("  at {}", env.find_first_location());
+                env.unwind();
             }
         }
     }

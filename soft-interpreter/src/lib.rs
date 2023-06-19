@@ -63,6 +63,12 @@ pub enum RuntimeError {
 
     #[error("expected an identifier")]
     ExpectedIdentifier,
+
+    #[error("expected a list")]
+    ExpectedList,
+
+    #[error("expected a number")]
+    ExpectedNumber,
 }
 
 /// A "stack frame" it stores variables in the stack and it is always a copy of the last one.
@@ -103,6 +109,14 @@ impl Environment {
         Environment {
             frames: im_rc::vector![Frame::root(path)],
         }
+    }
+
+    pub fn register_intrinsics(&mut self) {
+        self.intrinsic("call", crate::intrinsics::call);
+        self.intrinsic("set", crate::intrinsics::set);
+        self.intrinsic("lambda*", crate::intrinsics::lambda);
+        self.intrinsic("let*", crate::intrinsics::let_);
+        self.intrinsic("+", crate::intrinsics::add);
     }
 
     /// Gets the last stack frame.
@@ -201,7 +215,11 @@ impl Environment {
 
     /// Gets a variable from the last stack frame
     pub fn get(&mut self, name: &str) -> Option<Value> {
-        self.last_stack().variables.get(name).cloned()
+        self.last_stack()
+            .variables
+            .get(name)
+            .cloned()
+            .or_else(|| self.frames[0].variables.get(name).cloned())
     }
 
     pub fn set(&mut self, name: String, value: Value) {
@@ -226,7 +244,6 @@ impl Value {
             (Expr::Identifier(x), Expr::Identifier(y)) => x == y,
             (Expr::Str(x), Expr::Str(y)) => x == y,
             (Expr::Int(x), Expr::Int(y)) => x == y,
-            (Expr::Decimal(x, xs), Expr::Decimal(y, ys)) => x == y && xs == ys,
             (a, b) => std::ptr::eq(a, b),
         }
     }
@@ -235,34 +252,57 @@ impl Value {
         match &*self.0.borrow() {
             Expr::Cons(..) => {
                 let spine = Expr::spine(self.clone());
-                if spine.len() == size {
-                    Ok(spine)
-                } else {
-                    Err(RuntimeError::WrongArity(spine.len(), size))
+                if let Some(spine) = spine {
+                    if spine.len() == size {
+                        return Ok(spine);
+                    }
+                    return Err(RuntimeError::WrongArity(spine.len(), size));
                 }
             }
-            _ => Err(RuntimeError::WrongArity(size, 1)),
+            _ => (),
         }
+        Err(RuntimeError::WrongArity(size, 1))
     }
 
     pub fn at_least(&self, size: usize) -> Result<Vec<Value>> {
         match &*self.0.borrow() {
             Expr::Cons(..) => {
-                let spine = Expr::spine(self.clone());
-                if spine.len() >= size {
-                    Ok(spine)
-                } else {
-                    Err(RuntimeError::WrongArity(spine.len(), size))
+                if let Some(spine) = Expr::spine(self.clone()) {
+                    if spine.len() >= size {
+                        return Ok(spine);
+                    }
+                    return Err(RuntimeError::WrongArity(spine.len(), size));
                 }
             }
-            _ => Err(RuntimeError::WrongArity(size, 1)),
+            _ => (),
         }
+        Err(RuntimeError::WrongArity(size, 1))
     }
 
     pub fn assert_identifier(&self) -> Result<String> {
         match &*self.0.borrow() {
             Expr::Identifier(name) => Ok(name.clone()),
             _ => Err(RuntimeError::ExpectedIdentifier),
+        }
+    }
+
+    pub fn assert_number(&self) -> Result<u64> {
+        match &*self.0.borrow() {
+            Expr::Int(value) => Ok(*value),
+            _ => Err(RuntimeError::ExpectedNumber),
+        }
+    }
+
+    pub fn assert_list(&self) -> Result<Vec<Value>> {
+        match &*self.0.borrow() {
+            Expr::Cons(..) => {
+                if let Some(spine) = Expr::spine(self.clone()) {
+                    Ok(spine)
+                } else {
+                    Err(RuntimeError::ExpectedList)
+                }
+            }
+            _ => Err(RuntimeError::ExpectedList),
         }
     }
 }
@@ -316,7 +356,6 @@ pub enum Expr {
     Str(String),
     Int(u64),
     Vector(Vec<Value>),
-    Decimal(u64, u64),
 
     // Function things
     Extern(Extern),
@@ -333,18 +372,20 @@ impl Expr {
     }
 
     /// Gets the spine of elements of a cons list._
-    fn spine(value: Value) -> Vec<Value> {
+    fn spine(value: Value) -> Option<Vec<Value>> {
         let mut spine = Vec::new();
         let mut current = value;
 
-        while let Expr::Cons(tail, head) = &*current.clone().0.borrow() {
+        while let Expr::Cons(head, tail) = &*current.clone().0.borrow() {
             spine.push(head.clone());
             current = tail.clone();
         }
 
-        spine.push(current);
-        spine.reverse();
-        spine
+        let borrow = current.0.borrow();
+        match &*borrow {
+            Expr::Nil => Some(spine),
+            _ => None,
+        }
     }
 }
 
@@ -356,17 +397,20 @@ impl Display for Expr {
             Expr::Atom(atom) => write!(f, "'{}", atom),
             Expr::Str(string) => write!(f, "\"{}\"", string),
             Expr::Int(int) => write!(f, "{}", int),
-            Expr::Decimal(int, dec) => write!(f, "{}.{}", int, dec),
-            Expr::Cons(..) => {
+            Expr::Cons(head, tail) => {
                 let spine = Expr::spine(self.clone().to_value());
-                write!(f, "(")?;
-                for (i, value) in spine.iter().enumerate() {
-                    if i != 0 {
-                        write!(f, " ")?;
+                if let Some(spine) = spine {
+                    write!(f, "(")?;
+                    for (i, value) in spine.iter().enumerate() {
+                        if i != 0 {
+                            write!(f, " ")?;
+                        }
+                        write!(f, "{}", value.0.borrow())?;
                     }
-                    write!(f, "{}", value.0.borrow())?;
+                    write!(f, ")")
+                } else {
+                    write!(f, "({head} . {tail})")
                 }
-                write!(f, ")")
             }
             Expr::Extern(value) => write!(f, "<extern {}>", value.name),
             Expr::Closure(_) => write!(f, "<closure>"),
@@ -395,6 +439,12 @@ pub struct Closure {
     pub name: Option<String>,
     pub params: Vec<String>,
     pub value: Value,
+}
+
+impl From<Closure> for Expr {
+    fn from(value: Closure) -> Self {
+        Expr::Closure(value)
+    }
 }
 
 impl Function for Closure {
@@ -429,6 +479,12 @@ pub struct Extern {
     call: Prim,
 }
 
+impl From<Extern> for Expr {
+    fn from(value: Extern) -> Self {
+        Expr::Extern(value)
+    }
+}
+
 impl Debug for Extern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Extern").finish()
@@ -445,6 +501,18 @@ impl Function for Extern {
         let value = (self.call)(scope)?;
         env.pop_stack();
         Ok(value)
+    }
+}
+
+impl<'a> From<&'a [Value]> for Expr {
+    fn from(value: &'a [Value]) -> Self {
+        Expr::Vector(value.into())
+    }
+}
+
+impl From<Vec<Value>> for Expr {
+    fn from(value: Vec<Value>) -> Self {
+        Expr::Vector(value)
     }
 }
 
@@ -465,7 +533,7 @@ impl CallScope<'_> {
         expr.to_value()
     }
 
-    pub fn assert_size(&self, size: usize) -> Result<()> {
+    pub fn assert_arity(&self, size: usize) -> Result<()> {
         if self.args.len() != size {
             Err(RuntimeError::WrongArity(size, self.args.len()))
         } else {
@@ -481,8 +549,8 @@ impl CallScope<'_> {
         }
     }
 
-    pub fn ok(&self, expr: Expr) -> Result<Value> {
-        Ok(Value(Rc::new(RefCell::new(expr)), Meta::Intrinsic))
+    pub fn ok<T: Into<Expr>>(&self, expr: T) -> Result<Value> {
+        Ok(Value(Rc::new(RefCell::new(expr.into())), Meta::Intrinsic))
     }
 }
 
@@ -516,9 +584,13 @@ impl Eval for Value {
         match &*self.0.borrow() {
             Expr::Cons(_, _) => {
                 let spine = Expr::spine(self.clone());
-                let head = spine.first().unwrap();
-                let tail = &spine[1..];
-                Application(head.clone(), tail).eval(env)
+                if let Some(spine) = spine {
+                    let head = spine.first().unwrap();
+                    let tail = &spine[1..];
+                    Application(head.clone(), tail).eval(env)
+                } else {
+                    Ok(self.clone())
+                }
             }
             Expr::Identifier(_) => {
                 let call = env.get("call").unwrap();
@@ -567,9 +639,8 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
             ')' => {
                 if let Some((start, meta)) = indices.pop() {
                     let args = stack.split_off(start);
-                    let head = args.first().cloned().unwrap();
 
-                    stack.push(args.into_iter().skip(1).fold(head, |x, y| {
+                    stack.push(args.into_iter().rfold(Expr::Nil.to_value(), |y, x| {
                         Expr::Cons(x, y).to_meta_value(Meta::Location(meta.clone()))
                     }));
                 } else {
@@ -668,9 +739,9 @@ mod tests {
     #[test]
     fn repl_test() {
         let mut env = Environment::new(None);
-        env.intrinsic("call", crate::intrinsics::call);
+        env.register_intrinsics();
 
-        for expr in parse("a b", None).unwrap() {
+        for expr in parse("((lambda* (x y) (+ x x y y)) 1 2)", None).unwrap() {
             match expr.eval(&mut env) {
                 Ok(value) => println!("=> {}", value),
                 Err(err) => {
