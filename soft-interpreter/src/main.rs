@@ -3,7 +3,6 @@ use soft::{intrinsics, parse, Environment};
 
 fn main() {
     let mut environment = Environment::new(None);
-
     environment.extend("call", intrinsics::call);
 
     let args = std::env::args().skip(1).collect::<Vec<_>>();
@@ -18,13 +17,17 @@ fn main() {
         return;
     };
 
-    for expr in parse(&file).unwrap() {
+    for expr in parse(&file, Some(args[0].clone().into())).unwrap() {
         match expr.eval(&mut environment) {
             Ok(value) => println!("=> {}", value),
             Err(err) => {
-                println!("\nError: {}\n", err);
+                println!("{}", expr);
+                eprintln!(
+                    "Error: {}\n    at {}",
+                    err,
+                    environment.find_first_location()
+                );
                 environment.unwind();
-                println!();
             }
         }
     }

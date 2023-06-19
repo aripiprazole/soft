@@ -25,9 +25,11 @@ pub mod intrinsics;
 use std::{
     cell::RefCell,
     fmt::{Debug, Display},
+    iter::Peekable,
     panic::Location,
     path::PathBuf,
     rc::Rc,
+    str::Chars,
 };
 
 use thiserror::Error;
@@ -69,6 +71,7 @@ pub struct Frame {
     pub name: String,
     pub located_at: Meta,
     pub variables: im_rc::HashMap<String, Value, fxhash::FxBuildHasher>,
+    pub catch: bool,
 }
 
 impl Frame {
@@ -77,12 +80,13 @@ impl Frame {
     pub fn root(file: Option<PathBuf>) -> Frame {
         Frame {
             name: "root".into(),
-            located_at: Meta::Location {
+            located_at: Meta::Location(Place {
                 line: 0,
                 column: 0,
                 file,
-            },
+            }),
             variables: Default::default(),
+            catch: true,
         }
     }
 }
@@ -122,12 +126,22 @@ impl Environment {
         );
     }
 
+    pub fn find_first_location(&mut self) -> Meta {
+        for frame in self.frames.iter().rev() {
+            if let Meta::Location(_) = frame.located_at {
+                return frame.located_at.clone();
+            }
+        }
+        self.last_stack().located_at.clone()
+    }
+
     /// Adds a new stack frame based on the last one
     pub fn push_stack(&mut self, name: String) -> &mut Frame {
         let frame = Frame {
             name,
             located_at: Meta::Unknown,
             variables: self.last_stack().variables.clone(),
+            catch: false,
         };
         self.frames.push_back(frame);
         self.frames.back_mut().unwrap()
@@ -139,9 +153,10 @@ impl Environment {
 
     pub fn unwind(&mut self) {
         println!("stack backtrace:");
-        while let Some(frame) = self.frames.pop_back() {
+        while self.frames.last().map(|x| !x.catch).unwrap_or(false) {
+            let frame = self.frames.pop_back().unwrap();
             match frame.located_at {
-                Meta::Location { line, column, file } => {
+                Meta::Location(Place { line, column, file }) => {
                     let file = match file {
                         Some(file) => file.display().to_string(),
                         None => "REPL".into(),
@@ -179,6 +194,9 @@ impl Environment {
 pub struct Value(Rc<RefCell<Expr>>);
 
 impl Value {
+    pub fn located(self, meta: Meta) -> Value {
+        Expr::Meta(meta, self).to_value()
+    }
     /// Compare two simple values by value and others by reference.
     pub fn compare(&self, other: &Value) -> bool {
         match (&*self.0.borrow(), &*other.0.borrow()) {
@@ -235,17 +253,35 @@ impl Display for Value {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct Place {
+    line: u64,
+    column: u64,
+    file: Option<PathBuf>,
+}
+
 /// Meta information about a value. It can be used to store the location of the value in the source
 /// code or the location of the value in the source code.
 #[derive(Debug, Clone)]
 pub enum Meta {
-    Location {
-        line: u64,
-        column: u64,
-        file: Option<PathBuf>,
-    },
+    Location(Place),
     Extern(&'static str, Location<'static>),
     Unknown,
+}
+
+impl Display for Meta {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Meta::Location(Place {
+                line,
+                column,
+                file: Some(file),
+            }) => write!(f, "{}:{}:{}", file.display(), line, column),
+            Meta::Location(Place { line, column, .. }) => write!(f, "REPL:{}:{}", line, column),
+            Meta::Extern(name, _) => write!(f, "external/{}", name),
+            Meta::Unknown => write!(f, "<unknown>"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -398,11 +434,11 @@ impl CallScope<'_> {
         self.args
             .get(nth)
             .cloned()
-            .unwrap_or_else(|| Value(Rc::new(RefCell::new(Expr::Nil))))
+            .unwrap_or_else(|| Expr::Nil.to_value())
     }
 
     pub fn value(&self, expr: Expr) -> Value {
-        Value(Rc::new(RefCell::new(expr)))
+        expr.to_value()
     }
 
     pub fn assert_size(&self, size: usize) -> Result<()> {
@@ -434,7 +470,8 @@ pub struct Application<'a>(Value, &'a [Value]);
 
 impl<'a> Eval for Application<'a> {
     fn eval(&self, env: &mut Environment) -> Result<Value> {
-        let head_val = self.0 .0.borrow();
+        let head_val = self.0.eval(env)?;
+        let head_val = head_val.0.borrow();
 
         let func: &dyn Function = match &*head_val {
             Expr::Extern(ext) => ext,
@@ -469,21 +506,42 @@ impl Eval for Value {
 }
 
 /// Parses a source code at vector of values.
-pub fn parse(code: &str) -> Result<Vec<Value>> {
+pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
     let mut peekable = code.chars().peekable();
     let mut stack = vec![];
     let mut indices = vec![];
     let mut prefix = vec![];
 
-    while let Some(chr) = peekable.next() {
+    let mut meta = Place {
+        line: 1,
+        column: 0,
+        file,
+    };
+
+    fn next(peekable: &mut Peekable<Chars<'_>>, meta: &mut Place) -> Option<char> {
+        let chr = peekable.next()?;
+        match chr {
+            '\n' => {
+                meta.line += 1;
+                meta.column = 0;
+            }
+            _ => {
+                meta.column += 1;
+            }
+        }
+        Some(chr)
+    }
+
+    while let Some(chr) = next(&mut peekable, &mut meta) {
+        let start_meta = meta.clone();
         match chr {
             ' ' | '\n' | '\t' | '\r' => continue,
             '(' => {
-                indices.push(stack.len());
+                indices.push((stack.len(), meta.clone()));
                 continue;
             }
             ')' => {
-                if let Some(start) = indices.pop() {
+                if let Some((start, start_meta)) = indices.pop() {
                     let args = stack.split_off(start);
                     let head = args.first().cloned().unwrap();
 
@@ -501,7 +559,7 @@ pub fn parse(code: &str) -> Result<Vec<Value>> {
 
                 while let Some('0'..='9') = peekable.peek() {
                     num *= 10;
-                    num += peekable.next().unwrap() as u64 - '0' as u64;
+                    num += next(&mut peekable, &mut meta).unwrap() as u64 - '0' as u64;
                 }
 
                 stack.push(Expr::Int(num).to_value());
@@ -548,17 +606,17 @@ pub fn parse(code: &str) -> Result<Vec<Value>> {
 mod tests {
     use std::panic::Location;
 
-    use crate::{parse, Environment, Expr, Meta};
+    use crate::{parse, Environment, Expr, Meta, Place};
 
     #[test]
     fn unwind() {
         let mut env = Environment::new(None);
 
-        env.push_stack("main".to_string()).located_at = Meta::Location {
+        env.push_stack("main".to_string()).located_at = Meta::Location(Place {
             column: 10,
             line: 4,
             file: Some("main".into()),
-        };
+        });
 
         env.push_stack("fib".to_string()).located_at = Meta::Extern("fib", *Location::caller());
         env.push_stack("error".to_string()).located_at = Meta::Extern("fib", *Location::caller());
@@ -577,7 +635,7 @@ mod tests {
         let mut env = Environment::new(None);
         env.extend("nil", |scope| scope.ok(Expr::Nil));
 
-        let result = parse("(1 '2)");
+        let result = parse("(1 '2)", None);
         println!("{}", result.unwrap().first().unwrap().0.borrow());
     }
 }
