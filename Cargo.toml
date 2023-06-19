@@ -1,7 +1,6 @@
-[workspaces]
-
+[workspace]
 members = [
-
+  "soft-interpreter",
 ]
 
 resolver = "1"

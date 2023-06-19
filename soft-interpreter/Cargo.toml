@@ -1,0 +1,9 @@
+[package]
+edition = "2021"
+name = "soft-interpreter"
+version = "0.0.1"
+
+[dependencies]
+fxhash = "0.2.1"
+im-rc = "15.1.0"
+thiserror = "1.0.40"
