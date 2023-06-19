@@ -21,12 +21,9 @@ fn main() {
         match expr.eval(&mut environment) {
             Ok(value) => println!("=> {}", value),
             Err(err) => {
-                println!("{}", expr);
-                eprintln!(
-                    "Error: {}\n    at {}",
-                    err,
-                    environment.find_first_location()
-                );
+                eprintln!("{}", expr);
+                eprintln!("error: {err}");
+                eprintln!("  at {}", environment.find_first_location());
                 environment.unwind();
             }
         }

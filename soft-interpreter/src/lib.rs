@@ -110,6 +110,22 @@ impl Environment {
         self.frames.back_mut().unwrap()
     }
 
+    /// Add an intrinsic function
+    pub fn intrinsic(&mut self, name: &'static str, call: Prim) {
+        let current_stack = self.last_stack();
+
+        current_stack.variables.insert(
+            name.into(),
+            Expr::Extern(Extern {
+                name,
+                location: *Location::caller(),
+                call,
+                intrinsic: true,
+            })
+            .to_value(),
+        );
+    }
+
     /// Extends the current stack frame with a new primitive variable.
     #[track_caller]
     pub fn extend(&mut self, name: &'static str, call: Prim) {
@@ -118,11 +134,13 @@ impl Environment {
 
         current_stack.variables.insert(
             name.into(),
-            Value(Rc::new(RefCell::new(Expr::Extern(Extern {
+            Expr::Extern(Extern {
                 name,
                 location,
                 call,
-            })))),
+                intrinsic: false,
+            })
+            .to_value(),
         );
     }
 
@@ -139,7 +157,7 @@ impl Environment {
     pub fn push_stack(&mut self, name: String) -> &mut Frame {
         let frame = Frame {
             name,
-            located_at: Meta::Unknown,
+            located_at: Meta::Intrinsic,
             variables: self.last_stack().variables.clone(),
             catch: false,
         };
@@ -173,8 +191,9 @@ impl Environment {
                     println!("  at external/{name}",);
                     println!("    {}:{}:{}", file, line, column)
                 }
-                Meta::Unknown => {
-                    println!("  at <unknown>")
+                Meta::Intrinsic => {
+                    // Do not print to avoid intrinsic
+                    // println!("  at <unknown>")
                 }
             }
         }
@@ -191,11 +210,14 @@ impl Environment {
 }
 
 #[derive(Debug, Clone)]
-pub struct Value(Rc<RefCell<Expr>>);
+pub struct Value(Rc<RefCell<Expr>>, Meta);
 
 impl Value {
-    pub fn located(self, meta: Meta) -> Value {
-        Expr::Meta(meta, self).to_value()
+    pub fn location(&self) -> Option<Meta> {
+        match self.1.clone() {
+            value @ Meta::Extern(..) | value @ Meta::Location(..) => Some(value),
+            _ => None,
+        }
     }
     /// Compare two simple values by value and others by reference.
     pub fn compare(&self, other: &Value) -> bool {
@@ -205,8 +227,6 @@ impl Value {
             (Expr::Str(x), Expr::Str(y)) => x == y,
             (Expr::Int(x), Expr::Int(y)) => x == y,
             (Expr::Decimal(x, xs), Expr::Decimal(y, ys)) => x == y && xs == ys,
-            (Expr::Meta(_, n), _) => n.compare(self),
-            (_, Expr::Meta(_, n)) => self.compare(n),
             (a, b) => std::ptr::eq(a, b),
         }
     }
@@ -266,7 +286,7 @@ pub struct Place {
 pub enum Meta {
     Location(Place),
     Extern(&'static str, Location<'static>),
-    Unknown,
+    Intrinsic,
 }
 
 impl Display for Meta {
@@ -279,7 +299,7 @@ impl Display for Meta {
             }) => write!(f, "{}:{}:{}", file.display(), line, column),
             Meta::Location(Place { line, column, .. }) => write!(f, "REPL:{}:{}", line, column),
             Meta::Extern(name, _) => write!(f, "external/{}", name),
-            Meta::Unknown => write!(f, "<unknown>"),
+            Meta::Intrinsic => write!(f, "<unknown>"),
         }
     }
 }
@@ -301,13 +321,15 @@ pub enum Expr {
     // Function things
     Extern(Extern),
     Closure(Closure),
-
-    Meta(Meta, Value),
 }
 
 impl Expr {
     pub fn to_value(self) -> Value {
-        Value(Rc::new(RefCell::new(self)))
+        Value(Rc::new(RefCell::new(self)), Meta::Intrinsic)
+    }
+
+    pub fn to_meta_value(self, meta: Meta) -> Value {
+        Value(Rc::new(RefCell::new(self)), meta)
     }
 
     /// Gets the spine of elements of a cons list._
@@ -330,7 +352,6 @@ impl Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Expr::Nil => write!(f, "<nil>"),
-            Expr::Meta(_, value) => write!(f, "<{}>", value.0.borrow()),
             Expr::Identifier(atom) => write!(f, "{}", atom),
             Expr::Atom(atom) => write!(f, "'{}", atom),
             Expr::Str(string) => write!(f, "\"{}\"", string),
@@ -404,6 +425,7 @@ pub type Prim = fn(CallScope<'_>) -> Result<Value>;
 pub struct Extern {
     name: &'static str,
     location: Location<'static>,
+    intrinsic: bool,
     call: Prim,
 }
 
@@ -416,7 +438,9 @@ impl Debug for Extern {
 impl Function for Extern {
     fn call(&self, env: &mut Environment, args: Vec<Value>) -> Result<Value> {
         let frame = env.push_stack(self.name.to_string());
-        frame.located_at = Meta::Extern(self.name, self.location);
+        if let false = self.intrinsic {
+            frame.located_at = Meta::Extern(self.name, self.location);
+        }
         let scope = CallScope { args, env };
         let value = (self.call)(scope)?;
         env.pop_stack();
@@ -458,7 +482,7 @@ impl CallScope<'_> {
     }
 
     pub fn ok(&self, expr: Expr) -> Result<Value> {
-        Ok(Value(Rc::new(RefCell::new(expr))))
+        Ok(Value(Rc::new(RefCell::new(expr)), Meta::Intrinsic))
     }
 }
 
@@ -485,6 +509,10 @@ impl<'a> Eval for Application<'a> {
 
 impl Eval for Value {
     fn eval(&self, env: &mut Environment) -> Result<Value> {
+        if let Some(location) = self.location() {
+            env.last_stack().located_at = location;
+        }
+
         match &*self.0.borrow() {
             Expr::Cons(_, _) => {
                 let spine = Expr::spine(self.clone());
@@ -495,10 +523,6 @@ impl Eval for Value {
             Expr::Identifier(_) => {
                 let call = env.get("call").unwrap();
                 Application(call, &[self.clone()]).eval(env)
-            }
-            Expr::Meta(loc, expr) => {
-                env.last_stack().located_at = loc.clone();
-                expr.eval(env)
             }
             _ => Ok(self.clone()),
         }
@@ -533,7 +557,7 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
     }
 
     while let Some(chr) = next(&mut peekable, &mut meta) {
-        let start_meta = meta.clone();
+        let place = meta.clone();
         match chr {
             ' ' | '\n' | '\t' | '\r' => continue,
             '(' => {
@@ -541,15 +565,13 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
                 continue;
             }
             ')' => {
-                if let Some((start, start_meta)) = indices.pop() {
+                if let Some((start, meta)) = indices.pop() {
                     let args = stack.split_off(start);
                     let head = args.first().cloned().unwrap();
 
-                    stack.push(
-                        args.into_iter()
-                            .skip(1)
-                            .fold(head, |x, y| Expr::Cons(x, y).to_value()),
-                    );
+                    stack.push(args.into_iter().skip(1).fold(head, |x, y| {
+                        Expr::Cons(x, y).to_meta_value(Meta::Location(meta.clone()))
+                    }));
                 } else {
                     return Err(RuntimeError::UnmatchedParenthesis);
                 }
@@ -562,7 +584,7 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
                     num += next(&mut peekable, &mut meta).unwrap() as u64 - '0' as u64;
                 }
 
-                stack.push(Expr::Int(num).to_value());
+                stack.push(Expr::Int(num).to_meta_value(Meta::Location(place)));
             }
             '\'' => {
                 prefix.push(stack.len());
@@ -578,7 +600,7 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
                     symbol.push(peekable.next().unwrap());
                 }
 
-                stack.push(Expr::Identifier(symbol).to_value());
+                stack.push(Expr::Identifier(symbol).to_meta_value(Meta::Location(place)));
             }
         }
 
@@ -587,7 +609,11 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
                 prefix.pop();
                 let last = stack.pop().unwrap();
                 stack.push(
-                    Expr::Cons(Expr::Identifier("quote".to_string()).to_value(), last).to_value(),
+                    Expr::Cons(
+                        Expr::Identifier("quote".to_string()).to_meta_value(last.1.clone()),
+                        last,
+                    )
+                    .to_value(),
                 );
             }
         }
@@ -606,7 +632,7 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
 mod tests {
     use std::panic::Location;
 
-    use crate::{parse, Environment, Expr, Meta, Place};
+    use crate::{parse, Environment, Eval, Expr, Meta, Place};
 
     #[test]
     fn unwind() {
@@ -620,7 +646,7 @@ mod tests {
 
         env.push_stack("fib".to_string()).located_at = Meta::Extern("fib", *Location::caller());
         env.push_stack("error".to_string()).located_at = Meta::Extern("fib", *Location::caller());
-        env.push_stack("unknown".to_string()).located_at = Meta::Unknown;
+        env.push_stack("unknown".to_string()).located_at = Meta::Intrinsic;
         env.unwind();
     }
 
@@ -637,5 +663,23 @@ mod tests {
 
         let result = parse("(1 '2)", None);
         println!("{}", result.unwrap().first().unwrap().0.borrow());
+    }
+
+    #[test]
+    fn repl_test() {
+        let mut env = Environment::new(None);
+        env.intrinsic("call", crate::intrinsics::call);
+
+        for expr in parse("a b", None).unwrap() {
+            match expr.eval(&mut env) {
+                Ok(value) => println!("=> {}", value),
+                Err(err) => {
+                    eprintln!("{}", expr);
+                    eprintln!("error: {err}");
+                    eprintln!("  at {}", env.find_first_location());
+                    env.unwind();
+                }
+            }
+        }
     }
 }
