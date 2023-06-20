@@ -43,8 +43,8 @@ pub enum RuntimeError {
     #[error("undefined name {0}")]
     UndefinedName(String),
 
-    #[error("cannot call as function")]
-    NotCallable,
+    #[error("cannot call as function '{0}'")]
+    NotCallable(Value),
 
     #[error("unmatched parenthesis")]
     UnmatchedParenthesis,
@@ -143,6 +143,10 @@ impl Environment {
         self.intrinsic("-", crate::intrinsics::sub);
         self.intrinsic("*", crate::intrinsics::mul);
         self.intrinsic("len", crate::intrinsics::len);
+        self.intrinsic("quote", crate::intrinsics::quote);
+        self.intrinsic("print", crate::intrinsics::print);
+        self.intrinsic("cons", crate::intrinsics::cons);
+        self.intrinsic("nil", crate::intrinsics::nil);
     }
 
     /// Gets the last stack frame.
@@ -612,7 +616,7 @@ impl<'a> Eval for Application<'a> {
 
                 return Ok(value);
             }
-            _ => return Err(RuntimeError::NotCallable),
+            _ => return Err(RuntimeError::NotCallable(value.clone())),
         };
 
         func.call(env, self.2.to_vec())
@@ -729,7 +733,7 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
                 stack.push(Expr::Int(num).to_meta_value(Meta::Location(place)));
             }
             '\'' => {
-                prefix.push(stack.len());
+                prefix.push(indices.len());
                 continue;
             }
             chr => {
@@ -747,13 +751,13 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
         }
 
         if let Some(start) = prefix.last() {
-            if start + 1 == stack.len() {
+            if *start == indices.len() {
                 prefix.pop();
                 let last = stack.pop().unwrap();
                 stack.push(
                     Expr::Cons(
                         Expr::Identifier("quote".to_string()).to_meta_value(last.1.clone()),
-                        last,
+                        Expr::Cons(last, Expr::Nil.to_value()).to_value(),
                     )
                     .to_value(),
                 );
@@ -768,6 +772,24 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
     } else {
         Ok(stack)
     }
+}
+
+pub fn expand(env: &mut Environment, mut expr: Value) -> Result<Value, RuntimeError> {
+    env.mode = Mode::Macro;
+    env.expanded = true;
+
+    while env.expanded {
+        env.expanded = false;
+        expr = expr.eval(env)?;
+    }
+
+    Ok(expr)
+}
+
+pub fn run(env: &mut Environment, expr: Value) -> Result<Value, RuntimeError> {
+    let expr = expand(env, expr)?;
+    env.mode = Mode::Eval;
+    expr.eval(env)
 }
 
 #[cfg(test)]

@@ -151,3 +151,30 @@ pub fn quote(scope: CallScope<'_>) -> Result<Value> {
     scope.assert_arity(1)?;
     Ok(scope.at(0))
 }
+
+pub fn print(scope: CallScope<'_>) -> Result<Value> {
+    let args = scope.args.iter();
+
+    for arg in args {
+        match &*arg.0.borrow() {
+            Expr::Str(s) => print!("{}", s),
+            _ => print!("{}", arg),
+        }
+    }
+
+    scope.ok(Expr::Nil)
+}
+
+pub fn cons(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_arity(2)?;
+
+    let head = scope.at(0).eval(scope.env)?;
+    let tail = scope.at(1).eval(scope.env)?;
+
+    scope.ok(Expr::Cons(head, tail))
+}
+
+pub fn nil(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_arity(0)?;
+    scope.ok(Expr::Nil)
+}

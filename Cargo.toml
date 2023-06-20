@@ -1,6 +1,7 @@
 [workspace]
 members = [
   "soft-interpreter",
+  "soft-tests",
 ]
 
 resolver = "1"
