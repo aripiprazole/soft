@@ -61,14 +61,14 @@ pub enum RuntimeError {
     #[error("wrong arity, expected {0} arguments, got {1}")]
     WrongArity(usize, usize),
 
-    #[error("expected an identifier")]
-    ExpectedIdentifier,
+    #[error("expected an identifier but got '{0}'")]
+    ExpectedIdentifier(String),
 
-    #[error("expected a list")]
-    ExpectedList,
+    #[error("expected a list but got '{0}'")]
+    ExpectedList(String),
 
-    #[error("expected a number")]
-    ExpectedNumber,
+    #[error("expected a number but got '{0}'")]
+    ExpectedNumber(String),
 
     #[error("invalid escape")]
     InvalidEscape,
@@ -85,6 +85,7 @@ pub struct Frame {
     pub variables: im_rc::HashMap<String, Value, fxhash::FxBuildHasher>,
     pub is_macro: im_rc::HashSet<String, fxhash::FxBuildHasher>,
     pub catch: bool,
+    pub local: bool,
 }
 
 impl Frame {
@@ -101,6 +102,7 @@ impl Frame {
             variables: Default::default(),
             is_macro: Default::default(),
             catch: true,
+            local: false,
         }
     }
 }
@@ -116,6 +118,7 @@ pub enum Mode {
 #[derive(Debug, Clone)]
 pub struct Environment {
     pub frames: im_rc::Vector<Frame>,
+    pub global: Rc<RefCell<Frame>>,
     pub expanded: bool,
     pub mode: Mode,
 }
@@ -123,7 +126,8 @@ pub struct Environment {
 impl Environment {
     pub fn new(path: Option<PathBuf>) -> Environment {
         Environment {
-            frames: im_rc::vector![Frame::root(path)],
+            frames: im_rc::vector![Frame::root(path.clone())],
+            global: Rc::new(RefCell::new(Frame::root(path))),
             expanded: false,
             mode: Mode::Macro,
         }
@@ -147,6 +151,10 @@ impl Environment {
         self.intrinsic("print", crate::intrinsics::print);
         self.intrinsic("cons", crate::intrinsics::cons);
         self.intrinsic("nil", crate::intrinsics::nil);
+        self.intrinsic("<", crate::intrinsics::less);
+        self.intrinsic("if", crate::intrinsics::if_);
+        self.intrinsic("block", crate::intrinsics::block);
+        self.intrinsic("defn", crate::intrinsics::defn);
     }
 
     /// Gets the last stack frame.
@@ -156,9 +164,8 @@ impl Environment {
 
     /// Add an intrinsic function
     pub fn intrinsic(&mut self, name: &'static str, call: Prim) {
-        let current_stack = self.last_stack();
-
-        current_stack.variables.insert(
+        let mut frame = self.global.borrow_mut();
+        frame.variables.insert(
             name.into(),
             Expr::Extern(Extern {
                 name,
@@ -174,7 +181,7 @@ impl Environment {
     #[track_caller]
     pub fn extend(&mut self, name: &'static str, call: Prim) {
         let location = *Location::caller();
-        let current_stack = self.last_stack();
+        let mut current_stack = self.global.borrow_mut();
 
         current_stack.variables.insert(
             name.into(),
@@ -205,19 +212,24 @@ impl Environment {
             variables: self.last_stack().variables.clone(),
             is_macro: self.last_stack().is_macro.clone(),
             catch: false,
+            local: false,
         };
         self.frames.push_back(frame);
         self.frames.back_mut().unwrap()
+    }
+
+    pub fn add_local_stack(&mut self) {
+        let mut current_stack = self.last_stack().clone();
+        current_stack.local = true;
+        self.frames.push_back(current_stack);
     }
 
     pub fn pop_stack(&mut self) {
         self.frames.pop_back();
     }
 
-    pub fn unwind(&mut self) {
-        println!("stack backtrace:");
-        while self.frames.last().map(|x| !x.catch).unwrap_or(false) {
-            let frame = self.frames.pop_back().unwrap();
+    pub fn stack_trace(&mut self, unwinded: Vec<Frame>) {
+        for frame in unwinded {
             match frame.located_at {
                 Meta::Location(Place { line, column, file }) => {
                     let file = match file {
@@ -244,13 +256,33 @@ impl Environment {
         }
     }
 
+    pub fn unwind(&mut self) -> Vec<Frame> {
+        let mut unwinded = vec![];
+
+        while self.frames.last().map(|x| !x.catch).unwrap_or(false) {
+            let frame = self.frames.pop_back().unwrap();
+
+            if frame.local {
+                continue;
+            }
+
+            match frame.located_at {
+                Meta::Location(..) | Meta::Extern(..) => {
+                    unwinded.push(frame.clone());
+                }
+                _ => (),
+            }
+        }
+        unwinded
+    }
+
     /// Gets a variable from the last stack frame
     pub fn get(&mut self, name: &str) -> Option<Value> {
         self.last_stack()
             .variables
             .get(name)
             .cloned()
-            .or_else(|| self.frames[0].variables.get(name).cloned())
+            .or_else(|| self.global.borrow().variables.get(name).cloned())
     }
 
     pub fn set(&mut self, name: String, value: Value) {
@@ -268,6 +300,12 @@ impl Debug for Value {
 }
 
 impl Value {
+    pub fn from_list(list: Vec<Value>) -> Value {
+        list.into_iter().rfold(Expr::Nil.to_value(), |next, acc| {
+            Expr::Cons(acc, next).to_value()
+        })
+    }
+
     pub fn location(&self) -> Option<Meta> {
         match self.1.clone() {
             value @ Meta::Extern(..) | value @ Meta::Location(..) => Some(value),
@@ -287,6 +325,18 @@ impl Value {
             (Expr::Str(x), Expr::Str(y)) => x == y,
             (Expr::Int(x), Expr::Int(y)) => x == y,
             (a, b) => std::ptr::eq(a, b),
+        }
+    }
+
+    pub fn is_true(&self) -> bool {
+        match &*self.0.borrow() {
+            Expr::Nil => false,
+            Expr::Str(x) => !x.is_empty(),
+            Expr::Int(n) => *n != 0,
+            Expr::Vector(v) => !v.is_empty(),
+            Expr::Atom(s) => s != "false",
+            Expr::Identifier(s) => s != "false",
+            _ => false,
         }
     }
 
@@ -318,14 +368,14 @@ impl Value {
     pub fn assert_identifier(&self) -> Result<String> {
         match &*self.0.borrow() {
             Expr::Identifier(name) => Ok(name.clone()),
-            _ => Err(RuntimeError::ExpectedIdentifier),
+            _ => Err(RuntimeError::ExpectedIdentifier(self.to_string())),
         }
     }
 
     pub fn assert_number(&self) -> Result<u64> {
         match &*self.0.borrow() {
             Expr::Int(value) => Ok(*value),
-            _ => Err(RuntimeError::ExpectedNumber),
+            _ => Err(RuntimeError::ExpectedNumber(self.to_string())),
         }
     }
 
@@ -335,10 +385,10 @@ impl Value {
                 if let Some(spine) = Expr::spine(self.clone()) {
                     Ok(spine)
                 } else {
-                    Err(RuntimeError::ExpectedList)
+                    Err(RuntimeError::ExpectedList(self.to_string()))
                 }
             }
-            _ => Err(RuntimeError::ExpectedList),
+            _ => Err(RuntimeError::ExpectedList(self.to_string())),
         }
     }
 }
@@ -818,7 +868,8 @@ mod tests {
         env.push_stack("fib".to_string()).located_at = Meta::Extern("fib", *Location::caller());
         env.push_stack("error".to_string()).located_at = Meta::Extern("fib", *Location::caller());
         env.push_stack("unknown".to_string()).located_at = Meta::Intrinsic;
-        env.unwind();
+        let unwinded = env.unwind();
+        env.stack_trace(unwinded);
     }
 
     #[test]
@@ -848,7 +899,8 @@ mod tests {
                     eprintln!("{}", expr);
                     eprintln!("error: {err}");
                     eprintln!("  at {}", env.find_first_location());
-                    env.unwind();
+                    let unwinded = env.unwind();
+                    env.stack_trace(unwinded);
                 }
             }
         }

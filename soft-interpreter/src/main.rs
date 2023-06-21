@@ -20,7 +20,8 @@ fn main() {
         if let Err(err) = run(&mut env, expr) {
             eprintln!("error: {err}");
             eprintln!("  at {}", env.find_first_location());
-            env.unwind();
+            let unwinded = env.unwind();
+            env.stack_trace(unwinded);
         }
     }
 }

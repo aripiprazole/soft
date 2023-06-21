@@ -11,7 +11,7 @@ pub fn call(scope: CallScope<'_>) -> Result<Value> {
     let name = arg.assert_identifier()?;
 
     if let Some(res) = scope.env.get(&name) {
-        if scope.env.mode == Mode::Macro && scope.env.frames[0].is_macro.contains(&name) {
+        if scope.env.mode == Mode::Macro && scope.env.global.borrow().is_macro.contains(&name) {
             scope.env.expanded = true;
             Ok(res)
         } else if scope.env.mode == Mode::Eval {
@@ -33,7 +33,7 @@ pub fn set(scope: CallScope<'_>) -> Result<Value> {
     let name = scope.at(0).assert_identifier()?;
     let value = scope.at(1).eval(scope.env)?;
 
-    scope.env.frames[0].variables.insert(name, value);
+    scope.env.global.borrow_mut().variables.insert(name, value);
     scope.ok(Expr::Nil)
 }
 
@@ -42,7 +42,7 @@ pub fn setm(scope: CallScope<'_>) -> Result<Value> {
 
     let name = scope.at(0).assert_identifier()?;
 
-    scope.env.frames[0].is_macro.insert(name);
+    scope.env.global.borrow_mut().is_macro.insert(name);
 
     scope.ok(Expr::Nil)
 }
@@ -71,6 +71,41 @@ pub fn lambda(scope: CallScope<'_>) -> Result<Value> {
     })
 }
 
+pub fn defn(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_at_least(3)?;
+
+    let name = scope.at(0).assert_identifier()?;
+    let params = scope.at(1).assert_list()?;
+
+    let params = params
+        .iter()
+        .map(Value::assert_identifier)
+        .collect::<Result<_>>()?;
+
+    let meta = scope.env.last_stack().located_at.clone();
+    let env = scope.env.clone();
+
+    let block = Value::from_list(scope.args[2..].to_vec());
+    let value = Expr::Cons(Expr::Identifier("block".to_string()).to_value(), block).to_value();
+
+    let value = Closure {
+        env,
+        meta,
+        name: Some(name.clone()),
+        params,
+        value,
+    };
+
+    scope
+        .env
+        .global
+        .borrow_mut()
+        .variables
+        .insert(name, Expr::Closure(value).to_value());
+
+    scope.ok(Expr::Nil)
+}
+
 /// (defn let* (name value))
 pub fn let_(scope: CallScope<'_>) -> Result<Value> {
     scope.assert_arity(2)?;
@@ -81,6 +116,46 @@ pub fn let_(scope: CallScope<'_>) -> Result<Value> {
     scope.env.set(name, value);
 
     scope.ok(Expr::Nil)
+}
+
+/// (defn < (x, y))
+pub fn less(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_arity(2)?;
+
+    let x = scope.at(0).eval(scope.env)?.assert_number()?;
+    let y = scope.at(1).eval(scope.env)?.assert_number()?;
+
+    scope.ok(Expr::Identifier(
+        if x < y { "true" } else { "false" }.to_string(),
+    ))
+}
+
+pub fn if_(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_at_least(2)?;
+
+    let cond = scope.at(0).eval(scope.env)?;
+
+    let value = if cond.is_true() {
+        scope.at(1)
+    } else {
+        scope.at(2)
+    };
+
+    value.eval(scope.env)
+}
+
+pub fn block(scope: CallScope<'_>) -> Result<Value> {
+    scope.env.add_local_stack();
+
+    let mut result = Expr::Nil.to_value();
+
+    for arg in scope.args {
+        result = arg.eval(scope.env)?;
+    }
+
+    scope.env.pop_stack();
+
+    Ok(result)
 }
 
 /// (defn + (x, args..))
@@ -99,7 +174,7 @@ pub fn add(scope: CallScope<'_>) -> Result<Value> {
 pub fn sub(scope: CallScope<'_>) -> Result<Value> {
     scope.assert_at_least(1)?;
 
-    let mut result = scope.at(0).assert_number()?;
+    let mut result = scope.at(0).eval(scope.env)?.assert_number()?;
 
     for arg in scope.args.iter().skip(1) {
         let arg = arg.eval(scope.env)?.assert_number()?;
@@ -133,7 +208,7 @@ pub fn len(scope: CallScope<'_>) -> Result<Value> {
         Expr::Cons(..) => Expr::Int(Expr::spine(value).unwrap_or_default().len() as u64),
         Expr::Vector(vector) => Expr::Int(vector.len() as u64),
         Expr::Str(string) => Expr::Int(string.len() as u64),
-        _ => return Err(RuntimeError::ExpectedList),
+        _ => return Err(RuntimeError::ExpectedList(value.to_string())),
     })
 }
 
@@ -156,11 +231,13 @@ pub fn print(scope: CallScope<'_>) -> Result<Value> {
     let args = scope.args.iter();
 
     for arg in args {
-        match &*arg.0.borrow() {
+        match &*arg.eval(scope.env)?.0.borrow() {
             Expr::Str(s) => print!("{}", s),
-            _ => print!("{}", arg),
+            a => print!("{}", a),
         }
     }
+
+    println!();
 
     scope.ok(Expr::Nil)
 }
