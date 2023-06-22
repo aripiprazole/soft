@@ -19,9 +19,9 @@ fn main() {
     for expr in parse(&file, Some(args[0].clone().into())).unwrap() {
         if let Err(err) = run(&mut env, expr) {
             eprintln!("error: {err}");
-            eprintln!("  at {}", env.find_first_location());
+            eprintln!("  at {}", env.walk_env().last_stack().located_at);
             let unwinded = env.unwind();
-            env.stack_trace(unwinded);
+            env.print_stack_trace(unwinded);
         }
     }
 }

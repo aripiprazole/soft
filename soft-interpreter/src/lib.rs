@@ -120,16 +120,26 @@ pub struct Environment {
     pub frames: im_rc::Vector<Frame>,
     pub global: Rc<RefCell<Frame>>,
     pub expanded: bool,
+    pub old_env: Option<Box<Environment>>,
     pub mode: Mode,
 }
 
 impl Environment {
+    pub fn walk_env(&self) -> Environment {
+        let mut env = self;
+        while let Some(old_env) = &env.old_env {
+            env = old_env;
+        }
+        env.clone()
+    }
+
     pub fn new(path: Option<PathBuf>) -> Environment {
         Environment {
             frames: im_rc::vector![Frame::root(path.clone())],
             global: Rc::new(RefCell::new(Frame::root(path))),
             expanded: false,
             mode: Mode::Macro,
+            old_env: None,
         }
     }
 
@@ -165,34 +175,19 @@ impl Environment {
     /// Add an intrinsic function
     pub fn intrinsic(&mut self, name: &'static str, call: Prim) {
         let mut frame = self.global.borrow_mut();
-        frame.variables.insert(
-            name.into(),
-            Expr::Extern(Extern {
-                name,
-                location: *Location::caller(),
-                call,
-                intrinsic: true,
-            })
-            .to_value(),
-        );
+        frame
+            .variables
+            .insert(name.into(), Expr::Extern(Extern { name, call }).to_value());
     }
 
     /// Extends the current stack frame with a new primitive variable.
     #[track_caller]
     pub fn extend(&mut self, name: &'static str, call: Prim) {
-        let location = *Location::caller();
         let mut current_stack = self.global.borrow_mut();
 
-        current_stack.variables.insert(
-            name.into(),
-            Expr::Extern(Extern {
-                name,
-                location,
-                call,
-                intrinsic: false,
-            })
-            .to_value(),
-        );
+        current_stack
+            .variables
+            .insert(name.into(), Expr::Extern(Extern { name, call }).to_value());
     }
 
     pub fn find_first_location(&mut self) -> Meta {
@@ -219,8 +214,8 @@ impl Environment {
     }
 
     pub fn add_local_stack(&mut self) {
-        let mut current_stack = self.last_stack().clone();
-        current_stack.local = true;
+        let current_stack = self.last_stack().clone();
+        self.last_stack().local = true;
         self.frames.push_back(current_stack);
     }
 
@@ -228,7 +223,8 @@ impl Environment {
         self.frames.pop_back();
     }
 
-    pub fn stack_trace(&mut self, unwinded: Vec<Frame>) {
+    pub fn print_stack_trace(&mut self, unwinded: Vec<Frame>) {
+        println!("\n stack trace:");
         for frame in unwinded {
             match frame.located_at {
                 Meta::Location(Place { line, column, file }) => {
@@ -259,8 +255,10 @@ impl Environment {
     pub fn unwind(&mut self) -> Vec<Frame> {
         let mut unwinded = vec![];
 
-        while self.frames.last().map(|x| !x.catch).unwrap_or(false) {
-            let frame = self.frames.pop_back().unwrap();
+        let mut env = self.walk_env();
+
+        while env.frames.last().map(|x| !x.catch).unwrap_or(false) {
+            let frame = env.frames.pop_back().unwrap();
 
             if frame.local {
                 continue;
@@ -538,17 +536,25 @@ impl Function for Closure {
         let name = self.name.clone().unwrap_or_default();
         let env = &mut self.env.clone();
 
-        let frame = env.push_stack(format!("<closure:{}>", name));
-        frame.located_at = self.meta.clone();
-
         let params = self.params.iter().cloned();
         let args = args.into_iter();
 
-        for (param, arg) in params.zip(args) {
-            env.set(param, arg.eval(old_env)?);
+        let evaluated = args.map(|x| x.eval(old_env)).collect::<Result<Vec<_>>>()?;
+
+        for (param, arg) in params.zip(evaluated) {
+            env.set(param, arg);
         }
 
-        let value = self.value.eval(env)?;
+        let frame = env.push_stack(format!("<closure:{}>", name));
+        frame.located_at = self.meta.clone();
+
+        let value = match self.value.eval(env) {
+            Ok(value) => value,
+            Err(err) => {
+                old_env.old_env = Some(Box::new(env.clone()));
+                return Err(err);
+            }
+        };
 
         env.pop_stack();
         Ok(value)
@@ -560,8 +566,6 @@ pub type Prim = fn(CallScope<'_>) -> Result<Value>;
 #[derive(Clone)]
 pub struct Extern {
     name: &'static str,
-    location: Location<'static>,
-    intrinsic: bool,
     call: Prim,
 }
 
@@ -579,13 +583,8 @@ impl Debug for Extern {
 
 impl Function for Extern {
     fn call(&self, env: &mut Environment, args: Vec<Value>) -> Result<Value> {
-        let frame = env.push_stack(self.name.to_string());
-        if let false = self.intrinsic {
-            frame.located_at = Meta::Extern(self.name, self.location);
-        }
         let scope = CallScope { args, env };
         let value = (self.call)(scope)?;
-        env.pop_stack();
         Ok(value)
     }
 }
@@ -755,11 +754,11 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
             '"' => {
                 let mut string = String::new();
 
-                while let Some(chr) = peekable.next() {
+                while let Some(chr) = next(&mut peekable, &mut meta) {
                     match chr {
                         '"' => break,
                         '\\' => {
-                            let chr = peekable.next().unwrap();
+                            let chr = next(&mut peekable, &mut meta).unwrap();
                             match chr {
                                 'n' => string.push('\n'),
                                 't' => string.push('\t'),
@@ -800,7 +799,7 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
                     if matches!(chr, '(' | ')' | '\n' | '\t' | '\r' | ' ' | '"') {
                         break;
                     }
-                    symbol.push(peekable.next().unwrap());
+                    symbol.push(next(&mut peekable, &mut meta).unwrap());
                 }
 
                 stack.push(Expr::Identifier(symbol).to_meta_value(Meta::Location(place)));
@@ -869,7 +868,7 @@ mod tests {
         env.push_stack("error".to_string()).located_at = Meta::Extern("fib", *Location::caller());
         env.push_stack("unknown".to_string()).located_at = Meta::Intrinsic;
         let unwinded = env.unwind();
-        env.stack_trace(unwinded);
+        env.print_stack_trace(unwinded);
     }
 
     #[test]
@@ -898,9 +897,9 @@ mod tests {
                 Err(err) => {
                     eprintln!("{}", expr);
                     eprintln!("error: {err}");
-                    eprintln!("  at {}", env.find_first_location());
+                    eprintln!("  at {}", env.walk_env().last_stack().located_at);
                     let unwinded = env.unwind();
-                    env.stack_trace(unwinded);
+                    env.print_stack_trace(unwinded);
                 }
             }
         }
