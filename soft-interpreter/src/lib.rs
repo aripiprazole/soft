@@ -679,6 +679,13 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
     while let Some(chr) = next(&mut peekable, &mut meta) {
         let place = meta.clone();
         match chr {
+            ';' => {
+                while let Some(chr) = next(&mut peekable, &mut meta) {
+                    if chr == '\n' {
+                        break;
+                    }
+                }
+            }
             ' ' | '\n' | '\t' | '\r' => continue,
             '(' => {
                 indices.push((stack.len(), meta.clone()));
