@@ -40,23 +40,23 @@ pub type Result<T, E = RuntimeError> = std::result::Result<T, E>;
 
 #[derive(Error, Debug)]
 pub enum RuntimeError {
-    #[error("undefined name {0}")]
+    #[error("undefined name '{0}'")]
     UndefinedName(String),
 
     #[error("cannot call as function '{0}'")]
     NotCallable(Value),
 
     #[error("unmatched parenthesis")]
-    UnmatchedParenthesis,
+    UnmatchedParenthesis(Place),
 
     #[error("unclosed parenthesis")]
-    UnclosedParenthesis,
+    UnclosedParenthesis(Place),
 
     #[error("unclosed string")]
-    UnclosedString,
+    UnclosedString(Place),
 
     #[error("unmatched quote")]
-    UnmatchedQuote,
+    UnmatchedQuote(Place),
 
     #[error("wrong arity, expected {0} arguments, got {1}")]
     WrongArity(usize, usize),
@@ -75,6 +75,19 @@ pub enum RuntimeError {
 
     #[error("unterminated string")]
     UnterminatedString,
+}
+
+impl RuntimeError {
+    pub fn get_location(self) -> Option<Meta> {
+        let place = match self {
+            RuntimeError::UnmatchedParenthesis(place)
+            | RuntimeError::UnclosedParenthesis(place)
+            | RuntimeError::UnclosedString(place)
+            | RuntimeError::UnmatchedQuote(place) => Some(place),
+            _ => None,
+        };
+        place.map(Meta::Location)
+    }
 }
 
 /// A "stack frame" it stores variables in the stack and it is always a copy of the last one.
@@ -148,9 +161,11 @@ impl Environment {
     }
 
     pub fn register_intrinsics(&mut self) {
+        self.intrinsic("is-cons", crate::intrinsics::is_cons);
         self.intrinsic("call", crate::intrinsics::call);
         self.intrinsic("set*", crate::intrinsics::set);
         self.intrinsic("setm*", crate::intrinsics::setm);
+        self.intrinsic("list", crate::intrinsics::list);
         self.intrinsic("lambda*", crate::intrinsics::lambda);
         self.intrinsic("let*", crate::intrinsics::let_);
         self.intrinsic("+", crate::intrinsics::add);
@@ -164,7 +179,10 @@ impl Environment {
         self.intrinsic("<", crate::intrinsics::less);
         self.intrinsic("if", crate::intrinsics::if_);
         self.intrinsic("block", crate::intrinsics::block);
-        self.intrinsic("defn", crate::intrinsics::defn);
+        self.intrinsic("head", crate::intrinsics::head);
+        self.intrinsic("tail", crate::intrinsics::tail);
+        self.intrinsic("eq", crate::intrinsics::eq);
+        //self.intrinsic("defn", crate::intrinsics::defn);
     }
 
     /// Gets the last stack frame.
@@ -654,7 +672,11 @@ impl<'a> Eval for Application<'a> {
             Expr::Extern(ext) => ext,
             Expr::Closure(val) => val,
             _ if env.mode == Mode::Macro => {
-                let mut args = self.2.to_vec();
+                let mut args = self
+                    .2
+                    .iter()
+                    .map(|x| x.eval(env))
+                    .collect::<Result<Vec<_>>>()?;
                 args.insert(0, value.clone());
 
                 let value = args
@@ -748,7 +770,7 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
                         Expr::Cons(x, y).to_meta_value(Meta::Location(meta.clone()))
                     }));
                 } else {
-                    return Err(RuntimeError::UnmatchedParenthesis);
+                    return Err(RuntimeError::UnmatchedParenthesis(place));
                 }
             }
             '"' => {
@@ -789,7 +811,12 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
                 stack.push(Expr::Int(num).to_meta_value(Meta::Location(place)));
             }
             '\'' => {
-                prefix.push(indices.len());
+                prefix.push(("quote", indices.len()));
+                continue;
+            }
+
+            ',' => {
+                prefix.push(("unquote", indices.len()));
                 continue;
             }
             chr => {
@@ -806,13 +833,14 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
             }
         }
 
-        if let Some(start) = prefix.last() {
+        if let Some((name, start)) = prefix.last() {
             if *start == indices.len() {
+                let name = name.to_string();
                 prefix.pop();
                 let last = stack.pop().unwrap();
                 stack.push(
                     Expr::Cons(
-                        Expr::Identifier("quote".to_string()).to_meta_value(last.1.clone()),
+                        Expr::Identifier(name).to_meta_value(last.1.clone()),
                         Expr::Cons(last, Expr::Nil.to_value()).to_value(),
                     )
                     .to_value(),
@@ -822,9 +850,9 @@ pub fn parse(code: &str, file: Option<PathBuf>) -> Result<Vec<Value>> {
     }
 
     if !prefix.is_empty() {
-        Err(RuntimeError::UnmatchedQuote)
+        Err(RuntimeError::UnmatchedQuote(meta))
     } else if !indices.is_empty() {
-        Err(RuntimeError::UnmatchedParenthesis)
+        Err(RuntimeError::UnmatchedParenthesis(meta))
     } else {
         Ok(stack)
     }

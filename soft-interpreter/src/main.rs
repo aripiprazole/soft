@@ -16,12 +16,22 @@ fn main() {
         return;
     };
 
-    for expr in parse(&file, Some(args[0].clone().into())).unwrap() {
-        if let Err(err) = run(&mut env, expr) {
+    let exprs = parse(&file, Some(args[0].clone().into()));
+
+    match exprs {
+        Err(err) => {
             eprintln!("error: {err}");
-            eprintln!("  at {}", env.walk_env().last_stack().located_at);
-            let unwinded = env.unwind();
-            env.print_stack_trace(unwinded);
+            eprintln!("  at {}", err.get_location().unwrap());
+        }
+        Ok(exprs) => {
+            for expr in exprs {
+                if let Err(err) = run(&mut env, expr) {
+                    eprintln!("error: {err}");
+                    eprintln!("  at {}", env.walk_env().last_stack().located_at);
+                    let unwinded = env.unwind();
+                    env.print_stack_trace(unwinded);
+                }
+            }
         }
     }
 }

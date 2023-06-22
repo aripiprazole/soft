@@ -26,6 +26,69 @@ pub fn call(scope: CallScope<'_>) -> Result<Value> {
     }
 }
 
+pub fn head(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_arity(1)?;
+
+    let arg = scope.at(0).eval(scope.env)?;
+    let expr = &*arg.0.borrow();
+
+    match expr {
+        Expr::Cons(head, _) => Ok(head.clone()),
+        _ => Err(RuntimeError::ExpectedList(expr.to_string())),
+    }
+}
+
+pub fn tail(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_arity(1)?;
+
+    let arg = scope.at(0).eval(scope.env)?;
+    let expr = &*arg.0.borrow();
+
+    match expr {
+        Expr::Cons(_, tail) => Ok(tail.clone()),
+        _ => Err(RuntimeError::ExpectedList(expr.to_string())),
+    }
+}
+
+pub fn eq(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_arity(2)?;
+
+    let arg1 = scope.at(0).eval(scope.env)?;
+    let arg2 = scope.at(1).eval(scope.env)?;
+
+    if arg1.compare(&arg2) {
+        scope.ok(Expr::Identifier("true".to_string()))
+    } else {
+        scope.ok(Expr::Identifier("false".to_string()))
+    }
+}
+
+pub fn is_cons(scope: CallScope<'_>) -> Result<Value> {
+    scope.assert_arity(1)?;
+
+    let arg = scope.at(0).eval(scope.env)?;
+    let expr = &*arg.0.borrow();
+
+    scope.ok(Expr::Identifier(
+        if let Expr::Cons(_, _) = expr {
+            "true"
+        } else {
+            "false"
+        }
+        .to_string(),
+    ))
+}
+
+pub fn list(scope: CallScope<'_>) -> Result<Value> {
+    let mut result = Expr::Nil.to_value();
+
+    for arg in scope.args.iter().rev() {
+        result = Expr::Cons(arg.eval(scope.env)?, result).to_value();
+    }
+
+    Ok(result)
+}
+
 /// (defn set* (name value))
 pub fn set(scope: CallScope<'_>) -> Result<Value> {
     scope.assert_arity(2)?;
@@ -38,13 +101,13 @@ pub fn set(scope: CallScope<'_>) -> Result<Value> {
 }
 
 pub fn setm(scope: CallScope<'_>) -> Result<Value> {
-    scope.assert_arity(1)?;
+    scope.assert_arity(2)?;
 
     let name = scope.at(0).assert_identifier()?;
 
     scope.env.global.borrow_mut().is_macro.insert(name);
 
-    scope.ok(Expr::Nil)
+    set(scope)
 }
 
 /// (defn lambda* (params value))
