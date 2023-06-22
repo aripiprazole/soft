@@ -1,37 +1,23 @@
-use soft::{parse, run, Environment};
+use soft::environment::Environment;
 
 fn main() {
+    let code = "
+        (set* fib (fn* (n)
+            (if (< n 2)
+                n
+                (+ (fib (- n 1)) (fib (- n 2))))))
+        
+        (fib 10)
+    ";
+
     let mut env = Environment::new(None);
     env.register_intrinsics();
 
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
-
-    if args.len() != 1 {
-        eprintln!("Usage: soft <file>");
-        return;
-    }
-
-    let Ok(file) = std::fs::read_to_string(&args[0]) else {
-        eprintln!("Error: could not read file '{}'", &args[0]);
-        return;
-    };
-
-    let exprs = parse(&file, Some(args[0].clone().into()));
-
-    match exprs {
-        Err(err) => {
-            eprintln!("error: {err}");
-            eprintln!("  at {}", err.get_location().unwrap());
-        }
-        Ok(exprs) => {
-            for expr in exprs {
-                if let Err(err) = run(&mut env, expr) {
-                    eprintln!("error: {err}");
-                    eprintln!("  at {}", env.walk_env().last_stack().located_at);
-                    let unwinded = env.unwind();
-                    env.print_stack_trace(unwinded);
-                }
-            }
+    for value in soft::reader::read(code, None).unwrap() {
+        let evaluated = value.run(&mut env);
+        match evaluated {
+            Ok(value) => println!("ok: {}", value),
+            Err(err) => println!("error: {}", err),
         }
     }
 }
