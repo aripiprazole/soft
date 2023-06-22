@@ -21,6 +21,8 @@ impl Closure {
 
         let body = self.expr.clone().run(env)?;
 
+        env.pop();
+
         Ok(Trampoline::Return(body))
     }
 }
@@ -45,8 +47,8 @@ impl Value {
         match &self.kind {
             ExprKind::Id(name) => {
                 let Some(result) = env.find(name) else {
-                        return Err(RuntimeError::UndefinedName(name.clone()));
-                    };
+                    return Err(RuntimeError::UndefinedName(name.clone()));
+                };
                 Ok(Trampoline::Return(result))
             }
             ExprKind::Cons(head, tail) => {
