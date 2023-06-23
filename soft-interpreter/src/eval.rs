@@ -3,7 +3,7 @@
 
 use crate::environment::Environment;
 use crate::error::{Result, RuntimeError};
-use crate::value::{CallScope, Closure, ExprKind, Function, Trampoline, Value};
+use crate::value::{CallScope, Closure, Expr, Function, Trampoline, Value};
 
 impl Closure {
     pub fn apply(&self, args: Vec<Value>, env: &mut Environment) -> Result<Trampoline> {
@@ -36,7 +36,7 @@ impl Closure {
 
             'snd: loop {
                 match &ret.kind {
-                    ExprKind::Cons(head, tail) => {
+                    Expr::Cons(head, tail) => {
                         let (new_args, end) = tail.to_list().unwrap();
                         if let Some(end) = end {
                             return Err(RuntimeError::ExpectedList(end.to_string()));
@@ -45,7 +45,7 @@ impl Closure {
                         ret_head = head.clone().run(env)?.clone();
 
                         match &ret_head.kind {
-                            ExprKind::Function(Function::Closure(closure)) => {
+                            Expr::Function(Function::Closure(closure)) => {
                                 args = new_args
                                     .into_iter()
                                     .map(|arg| arg.run(env))
@@ -53,7 +53,7 @@ impl Closure {
                                 apply = closure;
                                 break;
                             }
-                            ExprKind::Function(Function::Extern(extern_)) => {
+                            Expr::Function(Function::Extern(extern_)) => {
                                 let scope = CallScope {
                                     args: new_args.to_vec(),
                                     env,
@@ -123,20 +123,20 @@ impl Value {
         self = self.expand(env)?;
 
         match &self.kind {
-            ExprKind::Id(name) => {
+            Expr::Id(name) => {
                 let Some(result) = env.find(name) else {
                     return Err(RuntimeError::UndefinedName(name.clone()));
                 };
                 Ok(Trampoline::Return(result))
             }
-            ExprKind::Cons(head, tail) => {
+            Expr::Cons(head, tail) => {
                 let (args, end) = tail.to_list().unwrap();
                 if let Some(end) = end {
                     return Err(RuntimeError::ExpectedList(end.to_string()));
                 }
                 let head = head.clone().run(env)?;
                 match &head.kind {
-                    ExprKind::Function(function) => match function.apply(args, env, true) {
+                    Expr::Function(function) => match function.apply(args, env, true) {
                         Ok(res) => Ok(res),
                         Err(err) => Err(err),
                     },

@@ -7,7 +7,7 @@ use im_rc::HashMap;
 
 use crate::{
     intrinsics,
-    value::{ExprKind, Function::Extern, Prim, Value},
+    value::{Expr, Function::Extern, Prim, Value},
 };
 
 /// A frame is an abstraction for a function call space that contains a lot of information about
@@ -165,7 +165,7 @@ impl Environment {
     }
 
     pub fn register_external(&mut self, name: &str, f: Prim) {
-        let value = ExprKind::Function(Extern(f)).to_value();
+        let value = Expr::Function(Extern(f)).to_value();
         self.global.insert(
             name.to_string(),
             Def {

@@ -4,7 +4,7 @@
 use std::{fmt::Display, iter::Peekable, str::Chars};
 
 use crate::error::{Result, RuntimeError};
-use crate::value::{Expr, ExprKind, Location, Value};
+use crate::value::{Expr, Location, Spanned, Value};
 
 /// A prefix is a symbol that can be at the beggining of an expression. It is used to create quote
 /// and unquote expressions.
@@ -89,7 +89,7 @@ impl<'a> State<'a> {
                     let span = expr.span.clone();
                     let expr = Value::from_iter(
                         vec![
-                            Expr::new(ExprKind::Id(prefix.to_string()), loc.into()).into(),
+                            Spanned::new(Expr::Id(prefix.to_string()), loc.into()).into(),
                             expr,
                         ]
                         .into_iter(),
@@ -163,9 +163,9 @@ impl<'a> State<'a> {
         });
 
         if let Ok(int) = string.parse::<i64>() {
-            self.push(Expr::new(ExprKind::Int(int), start.into()).into());
+            self.push(Spanned::new(Expr::Int(int), start.into()).into());
         } else {
-            self.push(Expr::new(ExprKind::Id(string), start.into()).into());
+            self.push(Spanned::new(Expr::Id(string), start.into()).into());
         }
     }
 
@@ -179,7 +179,7 @@ impl<'a> State<'a> {
         if self.advance().is_none() {
             return Err(RuntimeError::UnclosedString(self.position.clone()));
         }
-        self.push(Expr::new(ExprKind::Str(string), start.clone().into()).into());
+        self.push(Spanned::new(Expr::Str(string), start.clone().into()).into());
         Ok(())
     }
 }

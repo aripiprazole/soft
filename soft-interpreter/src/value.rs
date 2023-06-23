@@ -45,13 +45,13 @@ impl Display for Location {
 
 /// A value is a type that can be used by the interpreter.
 #[derive(Debug)]
-pub struct Expr {
-    pub kind: ExprKind,
+pub struct Spanned<T> {
+    pub kind: T,
     pub span: Option<Location>,
 }
 
-impl Expr {
-    pub fn new(kind: ExprKind, span: Option<Location>) -> Self {
+impl<T> Spanned<T> {
+    pub fn new(kind: T, span: Option<Location>) -> Self {
         Self { kind, span }
     }
 }
@@ -68,7 +68,7 @@ impl CallScope<'_> {
         self.args
             .get(nth)
             .cloned()
-            .unwrap_or_else(|| ExprKind::Nil.to_value())
+            .unwrap_or_else(|| Expr::Nil.to_value())
     }
 
     pub fn assert_arity(&self, size: usize) -> Result<()> {
@@ -120,7 +120,7 @@ pub enum Function {
 
 /// An expression is a value that can be evaluated to produce another expression.
 #[derive(Debug)]
-pub enum ExprKind {
+pub enum Expr {
     Int(i64),
     Id(String),
     Str(String),
@@ -129,24 +129,24 @@ pub enum ExprKind {
     Nil,
 }
 
-impl ExprKind {
+impl Expr {
     pub fn to_value(self) -> Value {
-        Expr::new(self, None).into()
+        Spanned::new(self, None).into()
     }
 
     pub fn is_nil(&self) -> bool {
-        matches!(self, ExprKind::Nil)
+        matches!(self, Expr::Nil)
     }
 
     pub fn is_cons(&self) -> bool {
-        matches!(self, ExprKind::Cons(_, _))
+        matches!(self, Expr::Cons(_, _))
     }
 }
 
 /// A value is a reference-counted, mutable expression that is not save to share but is used
 /// internally by the runtime.
 #[derive(Clone, Debug)]
-pub struct Value(Rc<UnsafeCell<Expr>>);
+pub struct Value(Rc<UnsafeCell<Spanned<Expr>>>);
 
 impl Value {
     pub fn is_true(&self) -> bool {
@@ -155,7 +155,7 @@ impl Value {
 
     pub fn assert_identifier(&self) -> Result<String> {
         match self.kind {
-            ExprKind::Id(ref id) => Ok(id.clone()),
+            Expr::Id(ref id) => Ok(id.clone()),
             _ => Err(RuntimeError::ExpectedIdentifier(self.to_string())),
         }
     }
@@ -174,7 +174,7 @@ impl Value {
 
     pub fn assert_number(&self) -> Result<i64> {
         match self.kind {
-            ExprKind::Int(ref int) => Ok(*int),
+            Expr::Int(ref int) => Ok(*int),
             _ => Err(RuntimeError::ExpectedNumber(self.to_string())),
         }
     }
@@ -186,11 +186,11 @@ impl Value {
         I: DoubleEndedIterator<Item = Self>,
     {
         let iter = iter.into_iter().rev();
-        let mut value = Expr::new(ExprKind::Nil, location).into();
+        let mut value = Spanned::new(Expr::Nil, location).into();
 
         for next in iter {
             let span = next.span.clone();
-            value = Expr::new(ExprKind::Cons(next, value), span).into();
+            value = Spanned::new(Expr::Cons(next, value), span).into();
         }
 
         value
@@ -210,7 +210,7 @@ impl Value {
 
         while !value.is_nil() {
             match value.kind {
-                ExprKind::Cons(ref head, ref tail) => {
+                Expr::Cons(ref head, ref tail) => {
                     list.push(head.clone());
                     value = tail.clone();
                 }
@@ -225,10 +225,10 @@ impl Value {
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind {
-            ExprKind::Int(int) => write!(f, "{}", int),
-            ExprKind::Id(ref id) => write!(f, "{}", id),
-            ExprKind::Str(ref string) => write!(f, "\"{}\"", string),
-            ExprKind::Cons(..) => {
+            Expr::Int(int) => write!(f, "{}", int),
+            Expr::Id(ref id) => write!(f, "{}", id),
+            Expr::Str(ref string) => write!(f, "\"{}\"", string),
+            Expr::Cons(..) => {
                 let (list, not_nil) = self.to_list().unwrap();
                 write!(f, "(")?;
                 if !list.is_empty() {
@@ -242,20 +242,20 @@ impl Display for Value {
                 }
                 write!(f, ")")
             }
-            ExprKind::Nil => write!(f, "()"),
-            ExprKind::Function(..) => write!(f, "<function>"),
+            Expr::Nil => write!(f, "()"),
+            Expr::Function(..) => write!(f, "<function>"),
         }
     }
 }
 
-impl From<Expr> for Value {
-    fn from(expr: Expr) -> Self {
+impl From<Spanned<Expr>> for Value {
+    fn from(expr: Spanned<Expr>) -> Self {
         Self(Rc::new(UnsafeCell::new(expr)))
     }
 }
 
 impl Deref for Value {
-    type Target = Expr;
+    type Target = Spanned<Expr>;
 
     fn deref(&self) -> &Self::Target {
         unsafe { &*self.0.get() }

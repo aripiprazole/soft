@@ -4,7 +4,7 @@ use crate::{
     environment::Environment,
     error::RuntimeError::{ExpectedList, NotCallable},
     value::{
-        ExprKind::{Cons, Function, Id},
+        Expr::{Cons, Function, Id},
         Value,
     },
 };
