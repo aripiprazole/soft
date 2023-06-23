@@ -1,39 +1,27 @@
 use soft::environment::Environment;
 
 fn main() {
-    let code = "
-(set* map (fn* map (f expr)
-    (if (cons? expr)
-        (cons (f (head expr)) (map f (tail expr)))
-        expr)))
+    let mut env = Environment::new(None);
+    env.register_intrinsics();
 
-(setm* quasi-quote (fn* quasi-quote (expr)
-    (if (cons? expr)
-        (if (eq 'unquote (head expr))
-            (head (tail expr))
-            (cons 'list (map quasi-quote expr)))
-        (list 'quote expr))))
+    let args = std::env::args().skip(1).collect::<Vec<_>>();
 
-(setm* defmacro (fn* defmacro (name args body)
-    (quasi-quote
-        (setm* ,name (fn* ,name ,args ,body)))))
+    if args.len() != 1 {
+        eprintln!("Usage: soft <file>");
+        return;
+    }
 
-(defmacro defun (name args body)
-    (quasi-quote
-        (set* ,name (fn* ,name ,args ,body))))
+    let file = args[0].clone();
 
-(defun fib (num)
-    (if (< num 2)
-        num
-        (+ (fib (- num 1)) (fib (- num 2)))))
+    let Ok(code) = std::fs::read_to_string(&file) else {
+        eprintln!("Error: could not read file '{}'", &file);
+        return;
+    };
 
-(print (fib 10))";
-
-    let file = "./examples/fib.lisp";
     let mut env = Environment::new(Some(file.to_string()));
     env.register_intrinsics();
 
-    for value in soft::reader::read(code, Some(file.to_string())).unwrap() {
+    for value in soft::reader::read(&code, Some(file)).unwrap() {
         let evaluated = value.run(&mut env);
         match evaluated {
             Ok(_) => (),
