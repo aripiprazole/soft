@@ -104,11 +104,11 @@ impl<'a> State<'a> {
         Ok(())
     }
 
-    fn accumulate_while<F>(&mut self, chr: char, mut f: F) -> String
+    fn accumulate_while<F>(&mut self, chr: Option<char>, mut f: F) -> String
     where
         F: FnMut(char) -> bool,
     {
-        let mut string: String = chr.into();
+        let mut string: String = chr.map(|x| x.into()).unwrap_or("".to_string());
 
         while let Some(&char) = self.peekable.peek() {
             if f(char) {
@@ -158,7 +158,7 @@ impl<'a> State<'a> {
     }
 
     fn parse_rest(&mut self, start: Location, chr: char) {
-        let string = self.accumulate_while(chr, |c| {
+        let string = self.accumulate_while(Some(chr), |c| {
             !matches!(c, '\n' | '\r' | '\t' | ' ' | ')' | '(' | '"')
         });
 
@@ -170,17 +170,16 @@ impl<'a> State<'a> {
     }
 
     fn parse_comment(&mut self) {
-        self.accumulate_while(';', |c| c != '\n');
+        self.accumulate_while(Some(';'), |c| c != '\n');
         self.advance();
     }
 
     fn parse_string(&mut self, start: &Location) -> Result<()> {
-        let string = self.accumulate_while('"', |c| c != '"');
+        let string = self.accumulate_while(None, |c| c != '"');
         if self.advance().is_none() {
             return Err(RuntimeError::UnclosedString(self.position.clone()));
         }
         self.push(Expr::new(ExprKind::Str(string), start.clone().into()).into());
-        self.advance();
         Ok(())
     }
 }

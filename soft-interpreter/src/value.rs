@@ -13,7 +13,6 @@ use std::{
 
 pub enum Trampoline {
     Eval(Value),
-    EvalPop(Value),
     Return(Value),
 }
 
@@ -51,6 +50,7 @@ impl Expr {
 pub struct CallScope<'a> {
     pub args: Vec<Value>,
     pub env: &'a mut Environment,
+    pub location: Option<Location>,
 }
 
 impl CallScope<'_> {
@@ -94,11 +94,11 @@ impl Debug for Extern {
 }
 
 /// A closure is a function that can be called from the interpreter.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Closure {
+    pub name: Option<String>,
     pub frame: Frame,
     pub params: Vec<String>,
-    pub location: Location,
     pub expr: Value,
 }
 

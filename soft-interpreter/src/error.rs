@@ -1,3 +1,4 @@
+/// Definitions of errors that can occur during runtime.
 use thiserror::Error;
 
 use crate::value::{Location, Value};
@@ -25,13 +26,13 @@ pub enum RuntimeError {
     #[error("wrong arity, expected {0} arguments, got {1}")]
     WrongArity(usize, usize),
 
-    #[error("expected an identifier but got '{0}'")]
+    #[error("expected an identifier but got {0}")]
     ExpectedIdentifier(String),
 
-    #[error("expected a list but got '{0}'")]
+    #[error("expected a list but got {0}")]
     ExpectedList(String),
 
-    #[error("expected a number but got '{0}'")]
+    #[error("expected a number but got {0}")]
     ExpectedNumber(String),
 
     #[error("invalid escape")]
