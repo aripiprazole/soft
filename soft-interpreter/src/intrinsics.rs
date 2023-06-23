@@ -74,6 +74,18 @@ pub fn set(scope: CallScope<'_>) -> Result<Trampoline> {
     Ok(Trampoline::Return(Expr::new(ExprKind::Nil, None).into()))
 }
 
+pub fn block(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_at_least(1)?;
+
+    let last = scope.args.last().unwrap();
+
+    for arg in scope.args.iter().take(scope.args.len() - 1).cloned() {
+        arg.run(scope.env)?;
+    }
+
+    Ok(Trampoline::Eval(last.clone()))
+}
+
 pub fn setm(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(2)?;
 

@@ -11,9 +11,19 @@ use std::{
     rc::Rc,
 };
 
+#[derive(Debug)]
 pub enum Trampoline {
     Eval(Value),
     Return(Value),
+}
+
+impl Display for Trampoline {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Trampoline::Eval(value) => write!(f, "Eval({})", value),
+            Trampoline::Return(value) => write!(f, "Return({})", value),
+        }
+    }
 }
 
 /// A location is a span of text in a file.

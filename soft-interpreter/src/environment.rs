@@ -113,6 +113,7 @@ impl Environment {
         self.register_external("tail", intrinsics::tail);
         self.register_external("cons", intrinsics::cons);
         self.register_external("list", intrinsics::list);
+        self.register_external("block", intrinsics::block);
     }
 
     pub fn find(&self, id: &str) -> Option<Value> {

@@ -17,15 +17,14 @@ impl Closure {
 
         env.push(self.frame.name.clone(), false, env.location.clone());
 
-        loop {
+        'first: loop {
             if apply.params.len() != args.len() {
                 return Err(RuntimeError::WrongArity(self.params.len(), args.len()));
             }
 
             let frame = env.last_frame();
-
-            *frame = self.frame.clone();
             frame.location = location.clone();
+            *frame = self.frame.clone();
 
             for (name, value) in self.params.iter().zip(args.iter().cloned()) {
                 frame.insert(name.clone(), value);
@@ -35,40 +34,50 @@ impl Closure {
 
             ret = self.expr.clone().expand(env)?;
 
-            match &ret.kind {
-                ExprKind::Cons(head, tail) => {
-                    let (new_args, end) = tail.to_list().unwrap();
+            'snd: loop {
+                match &ret.kind {
+                    ExprKind::Cons(head, tail) => {
+                        let (new_args, end) = tail.to_list().unwrap();
+                        if let Some(end) = end {
+                            return Err(RuntimeError::ExpectedList(end.to_string()));
+                        }
 
-                    if let Some(end) = end {
-                        return Err(RuntimeError::ExpectedList(end.to_string()));
+                        ret_head = head.clone().run(env)?.clone();
+
+                        match &ret_head.kind {
+                            ExprKind::Function(Function::Closure(closure)) => {
+                                args = new_args
+                                    .into_iter()
+                                    .map(|arg| arg.run(env))
+                                    .collect::<Result<Vec<_>>>()?;
+                                apply = closure;
+                                break;
+                            }
+                            ExprKind::Function(Function::Extern(extern_)) => {
+                                let scope = CallScope {
+                                    args: new_args.to_vec(),
+                                    env,
+                                    location: ret.span.clone(),
+                                };
+                                let result = (extern_)(scope)?;
+                                match result {
+                                    Trampoline::Eval(retu) => {
+                                        ret = retu;
+                                        continue 'snd;
+                                    }
+                                    Trampoline::Return(result) => {
+                                        env.pop();
+                                        return Ok(Trampoline::Return(result));
+                                    }
+                                }
+                            }
+                            _ => {
+                                return Err(RuntimeError::NotCallable(ret_head));
+                            }
+                        };
                     }
-
-                    ret_head = head.clone().run(env)?.clone();
-
-                    match &ret_head.kind {
-                        ExprKind::Function(Function::Closure(closure)) => {
-                            args = new_args
-                                .into_iter()
-                                .map(|arg| arg.run(env))
-                                .collect::<Result<Vec<_>>>()?;
-                            apply = closure;
-                        }
-                        ExprKind::Function(Function::Extern(extern_)) => {
-                            let scope = CallScope {
-                                args: new_args.to_vec(),
-                                env,
-                                location: ret.span.clone(),
-                            };
-                            let result = (extern_)(scope)?.run(env)?;
-                            env.pop();
-                            return Ok(Trampoline::Return(result));
-                        }
-                        _ => {
-                            return Err(RuntimeError::NotCallable(ret_head));
-                        }
-                    };
+                    _ => break 'first,
                 }
-                _ => break,
             }
         }
 

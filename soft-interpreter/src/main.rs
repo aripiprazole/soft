@@ -23,11 +23,11 @@ fn main() {
         (set* ,name (fn* ,name ,args ,body))))
 
 (defun fib (num)
-    (if (< num \"atapo\")
+    (if (< num 2)
         num
         (+ (fib (- num 1)) (fib (- num 2)))))
 
-(fib 10)";
+(print (fib 10))";
 
     let file = "./examples/fib.lisp";
     let mut env = Environment::new(Some(file.to_string()));
