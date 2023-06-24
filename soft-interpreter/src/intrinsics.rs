@@ -4,7 +4,9 @@ pub use io::*;
 pub use list::*;
 pub use num::*;
 pub use rt::*;
+pub use string::*;
 pub use unwind::*;
+pub use vec::*;
 
 pub mod cmp;
 pub mod env;
@@ -12,4 +14,6 @@ pub mod io;
 pub mod list;
 pub mod num;
 pub mod rt;
+pub mod string;
 pub mod unwind;
+pub mod vec;

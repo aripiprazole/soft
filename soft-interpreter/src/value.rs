@@ -163,6 +163,10 @@ impl Expr {
 pub struct Value(Rc<UnsafeCell<Spanned<Expr>>>);
 
 impl Value {
+    pub fn borrow_mut<'a>(self) -> &'a mut Spanned<Expr> {
+        unsafe { &mut *self.0.get() }
+    }
+
     pub fn is_true(&self) -> bool {
         !self.is_nil()
     }

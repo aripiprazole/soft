@@ -108,11 +108,15 @@ impl Environment {
 
         self.register_external("read", intrinsics::read);
         self.register_external("print", intrinsics::print);
+        self.register_external("import", intrinsics::import);
 
         self.register_external("fn*", intrinsics::fn_);
         self.register_external("if", intrinsics::if_);
         self.register_external("set*", intrinsics::set);
+        self.register_external("setm*", intrinsics::setm);
         self.register_external("quote", intrinsics::quote);
+        self.register_external("expand", intrinsics::expand);
+        self.register_external("block", intrinsics::block);
 
         self.register_external("+", intrinsics::add);
         self.register_external("-", intrinsics::sub);
@@ -133,14 +137,18 @@ impl Environment {
         self.register_external("function?", intrinsics::is_function);
         self.register_external("err?", intrinsics::is_error);
 
-        self.register_external("setm*", intrinsics::setm);
-        self.register_external("idx", intrinsics::idx);
-        self.register_external("expand", intrinsics::expand);
-        self.register_external("block", intrinsics::block);
-        self.register_external("import", intrinsics::import);
+        self.register_external("vec/index", intrinsics::vec_index);
+        self.register_external("vec/len", intrinsics::vec_len);
+        self.register_external("vec/push!", intrinsics::vec_push);
+        self.register_external("vec/pop!", intrinsics::vec_pop);
+        self.register_external("vec/set!", intrinsics::vec_set);
+        self.register_external("vec", intrinsics::vec);
+
+        self.register_external("err/message", intrinsics::err_message);
+        self.register_external("err/print-stack", intrinsics::err_print_stack);
+
         self.register_external("try*", intrinsics::try_);
         self.register_external("throw", intrinsics::throw);
-        self.register_external("err/print-stack", intrinsics::err_print_stack);
     }
 
     pub fn find(&self, id: &str) -> Option<Value> {

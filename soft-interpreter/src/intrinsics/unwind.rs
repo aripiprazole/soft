@@ -62,3 +62,17 @@ pub fn err_print_stack(scope: CallScope<'_>) -> Result<Trampoline> {
 
     Ok(Trampoline::returning(value))
 }
+
+pub fn err_message(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).run(scope.env)?;
+
+    let (err, _) = value.assert_error()?;
+
+    let RuntimeError::UserError(message) = err else {
+        unreachable!();
+    };
+
+    Ok(Trampoline::returning(message))
+}

@@ -80,19 +80,7 @@ pub fn fn_(scope: CallScope<'_>) -> Result<Trampoline> {
     )))
 }
 
-/*
-self.register_external("nil?", intrinsics::is_nil);
-self.register_external("vec?", intrinsics::is_vec);
-self.register_external("int?", intrinsics::is_int);
-self.register_external("atom?", intrinsics::is_atom);
-self.register_external("function?", intrinsics::is_function);
-self.register_external("err?", intrinsics::is_error);
-
-Implement all of these functions
-*/
-
 /// nil? : a -> bool
-/// Returns true if the value is nil, false otherwise.
 pub fn is_nil(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
 
