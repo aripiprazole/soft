@@ -3,6 +3,7 @@
 use crate::environment::{Environment, Frame};
 use crate::error::{Result, RuntimeError};
 
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::{
     cell::UnsafeCell,
@@ -140,6 +141,7 @@ pub enum Expr {
     Function(Function),
     Err(RuntimeError, Vec<Frame>),
     Vector(Vec<Value>),
+    HashMap(HashMap<String, (Value, Value)>),
     Nil,
 }
 
@@ -209,6 +211,22 @@ impl Value {
         }
 
         Ok(list)
+    }
+
+    pub fn assert_tuple(&self) -> Result<(Value, Value)> {
+        let (list, tail) = self
+            .to_list()
+            .ok_or_else(|| RuntimeError::ExpectedList(self.to_string()))?;
+
+        if tail.is_some() {
+            return Err(RuntimeError::ExpectedList(self.to_string()));
+        }
+
+        if list.len() != 2 {
+            return Err(RuntimeError::WrongArity(2, list.len()));
+        }
+
+        Ok((list[0].clone(), list[1].clone()))
     }
 
     pub fn assert_number(&self) -> Result<i64> {
@@ -326,6 +344,13 @@ impl Display for Value {
             Expr::Nil => write!(f, "()"),
             Expr::Function(..) => write!(f, "<function>"),
             Expr::Err(ref runtime_error, ..) => write!(f, "<runtime error: {}>", runtime_error),
+            Expr::HashMap(ref map, ..) => {
+                write!(f, "(hash-map")?;
+                for value in map.values() {
+                    write!(f, " ({} {})", value.0, value.1)?;
+                }
+                write!(f, ")")
+            }
         }
     }
 }

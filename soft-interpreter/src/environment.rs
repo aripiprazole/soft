@@ -144,6 +144,13 @@ impl Environment {
         self.register_external("vec/set!", intrinsics::vec_set);
         self.register_external("vec", intrinsics::vec);
 
+        self.register_external("hash-map", intrinsics::hash_map);
+        self.register_external("hash-map/get", intrinsics::hash_map_get);
+        self.register_external("hash-map/set!", intrinsics::hash_map_set);
+        self.register_external("hash-map/keys", intrinsics::hash_map_keys);
+        self.register_external("hash-map/vals", intrinsics::hash_map_vals);
+        self.register_external("hash-map/len", intrinsics::hash_map_len);
+
         self.register_external("string/len", intrinsics::string_length);
         self.register_external("string/slice", intrinsics::string_slice);
         self.register_external("string/concat", intrinsics::string_concat);
