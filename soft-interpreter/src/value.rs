@@ -17,6 +17,18 @@ pub enum Trampoline {
     Return(Value),
 }
 
+impl Trampoline {
+    pub fn returning<I: Into<Value>>(expr: I) -> Trampoline {
+        let expr: Value = expr.into();
+        Trampoline::Return(expr)
+    }
+
+    pub fn eval<I: Into<Value>>(expr: I) -> Trampoline {
+        let expr: Value = expr.into();
+        Trampoline::Eval(expr)
+    }
+}
+
 impl Display for Trampoline {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -153,6 +165,13 @@ impl Value {
         !self.is_nil()
     }
 
+    pub fn assert_string(&self) -> Result<String> {
+        match self.kind {
+            Expr::Str(ref string) => Ok(string.clone()),
+            _ => Err(RuntimeError::ExpectedString(self.to_string())),
+        }
+    }
+
     pub fn assert_identifier(&self) -> Result<String> {
         match self.kind {
             Expr::Id(ref id) => Ok(id.clone()),
@@ -245,6 +264,18 @@ impl Display for Value {
             Expr::Nil => write!(f, "()"),
             Expr::Function(..) => write!(f, "<function>"),
         }
+    }
+}
+
+impl From<Expr> for Value {
+    fn from(value: Expr) -> Self {
+        Spanned::new(value, None).into()
+    }
+}
+
+impl From<Expr> for Spanned<Expr> {
+    fn from(value: Expr) -> Self {
+        Spanned::new(value, None)
     }
 }
 

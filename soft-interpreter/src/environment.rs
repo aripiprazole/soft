@@ -2,6 +2,8 @@
 //! frames that are used for each function and each [Frame] contains a stack of scopes that are used
 //! for each block.
 
+use std::path::PathBuf;
+
 use crate::value::Location;
 use im_rc::HashMap;
 
@@ -68,6 +70,7 @@ pub struct Environment {
     global: HashMap<String, Def>,
     pub expanded: bool,
     pub location: Location,
+    pub imported_files: im_rc::HashSet<PathBuf>,
 }
 
 impl Environment {
@@ -83,6 +86,7 @@ impl Environment {
             expanded: false,
             global: HashMap::new(),
             location: start,
+            imported_files: Default::default(),
         }
     }
 
@@ -114,6 +118,7 @@ impl Environment {
         self.register_external("cons", intrinsics::cons);
         self.register_external("list", intrinsics::list);
         self.register_external("block", intrinsics::block);
+        self.register_external("import", intrinsics::import);
     }
 
     pub fn find(&self, id: &str) -> Option<Value> {

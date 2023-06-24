@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+
 use crate::error::{Result, RuntimeError};
+use crate::reader;
 use crate::value::{CallScope, Closure, Expr, Function, Spanned, Trampoline, Value};
 
 pub fn lambda(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -14,7 +17,6 @@ pub fn lambda(scope: CallScope<'_>) -> Result<Trampoline> {
         .collect::<Result<_>>()?;
 
     let mut frame = scope.env.last_frame().clone();
-
     frame.name = Some(name.clone());
 
     let closure = Closure {
@@ -24,13 +26,10 @@ pub fn lambda(scope: CallScope<'_>) -> Result<Trampoline> {
         expr: value,
     };
 
-    Ok(Trampoline::Return(
-        Spanned::new(
-            Expr::Function(Function::Closure(closure)),
-            scope.env.location.clone().into(),
-        )
-        .into(),
-    ))
+    Ok(Trampoline::returning(Spanned::new(
+        Expr::Function(Function::Closure(closure)),
+        scope.env.location.clone().into(),
+    )))
 }
 
 pub fn add(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -43,9 +42,7 @@ pub fn add(scope: CallScope<'_>) -> Result<Trampoline> {
         result += arg;
     }
 
-    Ok(Trampoline::Return(
-        Spanned::new(Expr::Int(result), None).into(),
-    ))
+    Ok(Trampoline::returning(Expr::Int(result)))
 }
 
 pub fn sub(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -58,9 +55,7 @@ pub fn sub(scope: CallScope<'_>) -> Result<Trampoline> {
         result -= arg;
     }
 
-    Ok(Trampoline::Return(
-        Spanned::new(Expr::Int(result), None).into(),
-    ))
+    Ok(Trampoline::returning(Expr::Int(result)))
 }
 
 pub fn set(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -71,7 +66,7 @@ pub fn set(scope: CallScope<'_>) -> Result<Trampoline> {
 
     scope.env.insert_global(name, value, false);
 
-    Ok(Trampoline::Return(Spanned::new(Expr::Nil, None).into()))
+    Ok(Trampoline::returning(Expr::Nil))
 }
 
 pub fn block(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -83,7 +78,7 @@ pub fn block(scope: CallScope<'_>) -> Result<Trampoline> {
         arg.run(scope.env)?;
     }
 
-    Ok(Trampoline::Eval(last.clone()))
+    Ok(Trampoline::eval(last.clone()))
 }
 
 pub fn setm(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -94,7 +89,7 @@ pub fn setm(scope: CallScope<'_>) -> Result<Trampoline> {
 
     scope.env.insert_global(name, value, true);
 
-    Ok(Trampoline::Return(Spanned::new(Expr::Nil, None).into()))
+    Ok(Trampoline::returning(Expr::Nil))
 }
 
 pub fn if_(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -106,7 +101,7 @@ pub fn if_(scope: CallScope<'_>) -> Result<Trampoline> {
 
     let expr = if condition { consequent } else { alternative };
 
-    Ok(Trampoline::Eval(expr))
+    Ok(Trampoline::eval(expr))
 }
 
 pub fn less_than(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -121,7 +116,7 @@ pub fn less_than(scope: CallScope<'_>) -> Result<Trampoline> {
         Expr::Nil
     };
 
-    Ok(Trampoline::Return(Spanned::new(value, None).into()))
+    Ok(Trampoline::returning(value))
 }
 
 pub fn expand(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -136,7 +131,7 @@ pub fn expand(scope: CallScope<'_>) -> Result<Trampoline> {
 pub fn quote(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
 
-    Ok(Trampoline::Return(scope.at(0)))
+    Ok(Trampoline::returning(scope.at(0)))
 }
 
 pub fn is_cons(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -150,14 +145,15 @@ pub fn is_cons(scope: CallScope<'_>) -> Result<Trampoline> {
         Expr::Nil
     };
 
-    Ok(Trampoline::Return(Spanned::new(value, None).into()))
+    Ok(Trampoline::returning(value))
 }
 
 pub fn print(scope: CallScope<'_>) -> Result<Trampoline> {
     for arg in scope.args.iter() {
         print!("{}", arg.clone().run(scope.env)?);
     }
-    Ok(Trampoline::Return(Spanned::new(Expr::Nil, None).into()))
+
+    Ok(Trampoline::returning(Expr::Nil))
 }
 
 pub fn eq(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -166,8 +162,8 @@ pub fn eq(scope: CallScope<'_>) -> Result<Trampoline> {
     let left = scope.at(0).run(scope.env)?;
     let right = scope.at(1).run(scope.env)?;
 
-    let tt = Spanned::new(Expr::Id("true".to_string()), None).into();
-    let ff = Spanned::new(Expr::Nil, None).into();
+    let tt = Expr::Id("true".to_string());
+    let ff = Expr::Nil;
 
     let result = match (&left.kind, &right.kind) {
         (Expr::Int(left), Expr::Int(right)) => left == right,
@@ -177,7 +173,7 @@ pub fn eq(scope: CallScope<'_>) -> Result<Trampoline> {
         _ => false,
     };
 
-    Ok(Trampoline::Return(if result { tt } else { ff }))
+    Ok(Trampoline::returning(if result { tt } else { ff }))
 }
 
 pub fn head(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -197,7 +193,7 @@ pub fn tail(scope: CallScope<'_>) -> Result<Trampoline> {
     let value = scope.at(0).run(scope.env)?;
 
     match &value.kind {
-        Expr::Cons(_, tail) => Ok(Trampoline::Return(tail.clone())),
+        Expr::Cons(_, tail) => Ok(Trampoline::returning(tail.clone())),
         _ => Err(RuntimeError::ExpectedList(value.to_string())),
     }
 }
@@ -208,9 +204,7 @@ pub fn cons(scope: CallScope<'_>) -> Result<Trampoline> {
     let head = scope.at(0).run(scope.env)?;
     let tail = scope.at(1).run(scope.env)?;
 
-    Ok(Trampoline::Return(
-        Spanned::new(Expr::Cons(head, tail), None).into(),
-    ))
+    Ok(Trampoline::returning(Expr::Cons(head, tail)))
 }
 
 pub fn list(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -218,8 +212,53 @@ pub fn list(scope: CallScope<'_>) -> Result<Trampoline> {
 
     for arg in scope.args.into_iter().rev() {
         let arg = arg.run(scope.env)?;
-        result = Spanned::new(Expr::Cons(arg, result.into()), None);
+        result = Expr::Cons(arg, result.into()).into();
     }
 
-    Ok(Trampoline::Return(result.into()))
+    Ok(Trampoline::returning(result))
+}
+
+pub fn import(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let mut cwd = scope
+        .env
+        .location
+        .file
+        .clone()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap());
+
+    let path = scope.at(0).assert_string()?;
+    cwd.pop();
+
+    cwd.push(path);
+
+    let cwd = cwd.canonicalize().unwrap();
+
+    if scope.env.imported_files.contains(&cwd) {
+        return Ok(Trampoline::returning(Expr::Nil));
+    } else {
+        scope.env.imported_files.insert(cwd.clone());
+    }
+
+    let cwd = pathdiff::diff_paths(cwd, std::env::current_dir().unwrap()).unwrap();
+
+    let Ok(contents) = std::fs::read_to_string(&cwd) else {
+        return Err(RuntimeError::UserError(format!("cannot find file '{}'", cwd.display())))
+    };
+
+    let values = reader::read(&contents, Some(cwd.to_str().unwrap().to_owned()))?;
+
+    values
+        .into_iter()
+        .try_fold(Expr::Nil.into(), |_, next| next.run(scope.env))?;
+
+    Ok(Trampoline::returning(Expr::Nil))
+}
+
+pub fn eval(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+    let expr = scope.at(0);
+    Ok(Trampoline::Eval(expr))
 }

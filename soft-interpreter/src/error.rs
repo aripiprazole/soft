@@ -29,11 +29,17 @@ pub enum RuntimeError {
     #[error("expected an identifier but got {0}")]
     ExpectedIdentifier(String),
 
+    #[error("expected a string but got {0}")]
+    ExpectedString(String),
+
     #[error("expected a list but got {0}")]
     ExpectedList(String),
 
     #[error("expected a number but got {0}")]
     ExpectedNumber(String),
+
+    #[error("{0}")]
+    UserError(String),
 
     #[error("invalid escape")]
     InvalidEscape,
