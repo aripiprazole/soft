@@ -101,13 +101,15 @@ impl Environment {
     }
 
     pub fn register_intrinsics(&mut self) {
-        self.register_external("fn*", intrinsics::lambda);
+        self.register_external("fn*", intrinsics::fn_);
         self.register_external("set*", intrinsics::set);
         self.register_external("setm*", intrinsics::setm);
         self.register_external("if", intrinsics::if_);
+        self.register_external(">", intrinsics::greater_than);
         self.register_external("<", intrinsics::less_than);
         self.register_external("+", intrinsics::add);
         self.register_external("-", intrinsics::sub);
+        self.register_external("idx", intrinsics::idx);
         self.register_external("expand", intrinsics::expand);
         self.register_external("quote", intrinsics::quote);
         self.register_external("cons?", intrinsics::is_cons);

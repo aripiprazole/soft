@@ -1,7 +1,7 @@
 /// Definitions of errors that can occur during runtime.
 use thiserror::Error;
 
-use crate::value::{Location, Value};
+use crate::value::{Expr, Location, Value};
 
 #[derive(Error, Debug, Clone)]
 pub enum RuntimeError {
@@ -52,6 +52,18 @@ pub enum RuntimeError {
 
     #[error("catch requires two arguments")]
     CatchRequiresTwoArgs,
+}
+
+impl From<String> for RuntimeError {
+    fn from(value: String) -> Self {
+        RuntimeError::UserError(Value::from(Expr::Str(value)))
+    }
+}
+
+impl From<&str> for RuntimeError {
+    fn from(value: &str) -> Self {
+        RuntimeError::UserError(Value::from(Expr::Str(value.to_string())))
+    }
 }
 
 pub type Result<T> = std::result::Result<T, RuntimeError>;
