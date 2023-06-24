@@ -14,8 +14,8 @@
 
 (setm* defmacro (fn* defmacro (name args body)
     (quasi-quote
-        (setm* ,name (fn* ,name ,args ,body)))))
+        (setm* `name (fn* `name `args `body)))))
 
 (defmacro defun (name args body)
     (quasi-quote
-        (set* ,name (fn* ,name ,args ,body))))
+        (set* `name (fn* `name `args `body))))

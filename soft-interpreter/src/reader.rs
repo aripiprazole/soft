@@ -130,7 +130,7 @@ impl<'a> State<'a> {
                     self.prefix(start, Prefix::Quote);
                     continue;
                 }
-                ',' => {
+                '`' => {
                     self.prefix(start, Prefix::Unquote);
                     continue;
                 }
