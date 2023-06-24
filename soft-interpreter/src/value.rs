@@ -163,6 +163,13 @@ impl Expr {
 pub struct Value(Rc<UnsafeCell<Spanned<Expr>>>);
 
 impl Value {
+    pub fn stringify(&self) -> String {
+        match self.kind {
+            Expr::Str(ref string) => string.clone(),
+            _ => self.to_string(),
+        }
+    }
+
     pub fn borrow_mut<'a>(self) -> &'a mut Spanned<Expr> {
         unsafe { &mut *self.0.get() }
     }

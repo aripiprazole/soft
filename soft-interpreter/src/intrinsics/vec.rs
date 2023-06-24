@@ -1,5 +1,3 @@
-use std::borrow::{Borrow, BorrowMut};
-
 use crate::{
     error::{Result, RuntimeError},
     value::{CallScope, Expr, Trampoline},

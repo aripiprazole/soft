@@ -144,8 +144,17 @@ impl Environment {
         self.register_external("vec/set!", intrinsics::vec_set);
         self.register_external("vec", intrinsics::vec);
 
+        self.register_external("string/len", intrinsics::string_length);
+        self.register_external("string/slice", intrinsics::string_slice);
+        self.register_external("string/concat", intrinsics::string_concat);
+        self.register_external("string/split", intrinsics::string_split);
+
         self.register_external("err/message", intrinsics::err_message);
         self.register_external("err/print-stack", intrinsics::err_print_stack);
+
+        self.register_external("to-string", intrinsics::to_string);
+        self.register_external("to-int", intrinsics::to_int);
+        self.register_external("to-atom", intrinsics::to_atom);
 
         self.register_external("try*", intrinsics::try_);
         self.register_external("throw", intrinsics::throw);

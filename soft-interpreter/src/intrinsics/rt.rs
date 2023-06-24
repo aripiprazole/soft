@@ -167,3 +167,29 @@ pub fn is_error(scope: CallScope<'_>) -> Result<Trampoline> {
 
     Ok(Trampoline::Return(value.into()))
 }
+
+pub fn to_string(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).run(scope.env)?.stringify();
+
+    Ok(Trampoline::returning(Expr::Str(value)))
+}
+
+pub fn to_atom(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).run(scope.env)?.stringify();
+
+    Ok(Trampoline::returning(Expr::Id(value)))
+}
+
+pub fn to_int(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).run(scope.env)?.stringify();
+
+    let value = value.parse::<i64>().unwrap_or_default();
+
+    Ok(Trampoline::returning(Expr::Int(value)))
+}
