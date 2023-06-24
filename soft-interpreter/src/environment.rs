@@ -18,7 +18,7 @@ use crate::{
 pub struct Frame {
     pub name: Option<String>,
     pub location: Location,
-    catch: bool,
+    pub catch: bool,
     stack: im_rc::Vector<im_rc::HashMap<String, Value>>,
 }
 
@@ -119,6 +119,9 @@ impl Environment {
         self.register_external("list", intrinsics::list);
         self.register_external("block", intrinsics::block);
         self.register_external("import", intrinsics::import);
+        self.register_external("try*", intrinsics::try_);
+        self.register_external("throw", intrinsics::throw);
+        self.register_external("err/print-stack", intrinsics::err_print_stack);
     }
 
     pub fn find(&self, id: &str) -> Option<Value> {
@@ -153,6 +156,14 @@ impl Environment {
 
     pub fn pop(&mut self) {
         self.frames.pop();
+    }
+
+    pub fn enable_catching(&mut self) {
+        self.last_frame().catch = true;
+    }
+
+    pub fn disable_catching(&mut self) {
+        self.last_frame().catch = false;
     }
 
     pub fn unwind(&mut self) -> Vec<Frame> {

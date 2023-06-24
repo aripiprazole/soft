@@ -138,6 +138,7 @@ pub enum Expr {
     Str(String),
     Cons(Value, Value),
     Function(Function),
+    Err(RuntimeError, Vec<Frame>),
     Nil,
 }
 
@@ -169,6 +170,13 @@ impl Value {
         match self.kind {
             Expr::Str(ref string) => Ok(string.clone()),
             _ => Err(RuntimeError::ExpectedString(self.to_string())),
+        }
+    }
+
+    pub fn assert_error(&self) -> Result<(RuntimeError, Vec<Frame>)> {
+        match self.kind {
+            Expr::Err(ref err, ref stack) => Ok((err.clone(), stack.clone())),
+            _ => Err(RuntimeError::ExpectedErr(self.to_string())),
         }
     }
 
@@ -263,6 +271,7 @@ impl Display for Value {
             }
             Expr::Nil => write!(f, "()"),
             Expr::Function(..) => write!(f, "<function>"),
+            Expr::Err(ref runtime_error, ..) => write!(f, "<runtime error: {}>", runtime_error),
         }
     }
 }

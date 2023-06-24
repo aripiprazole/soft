@@ -153,6 +153,8 @@ pub fn print(scope: CallScope<'_>) -> Result<Trampoline> {
         print!("{}", arg.clone().run(scope.env)?);
     }
 
+    println!();
+
     Ok(Trampoline::returning(Expr::Nil))
 }
 
@@ -245,7 +247,8 @@ pub fn import(scope: CallScope<'_>) -> Result<Trampoline> {
     let cwd = pathdiff::diff_paths(cwd, std::env::current_dir().unwrap()).unwrap();
 
     let Ok(contents) = std::fs::read_to_string(&cwd) else {
-        return Err(RuntimeError::UserError(format!("cannot find file '{}'", cwd.display())))
+        let msg = format!("cannot find file '{}'", cwd.display());
+        return Err(RuntimeError::UserError(Value::from(Expr::Str(msg))))
     };
 
     let values = reader::read(&contents, Some(cwd.to_str().unwrap().to_owned()))?;
@@ -255,6 +258,65 @@ pub fn import(scope: CallScope<'_>) -> Result<Trampoline> {
         .try_fold(Expr::Nil.into(), |_, next| next.run(scope.env))?;
 
     Ok(Trampoline::returning(Expr::Nil))
+}
+
+pub fn throw(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    Err(RuntimeError::UserError(scope.at(0).run(scope.env)?))
+}
+
+pub fn try_(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(2)?;
+
+    let try_expr = scope.at(0);
+    let catch_expr = scope.at(1);
+
+    let catch_expr = catch_expr.assert_list()?;
+    if catch_expr.len() < 2 {
+        return Err(RuntimeError::CatchRequiresTwoArgs);
+    }
+
+    let catch_name = catch_expr[0].assert_identifier()?;
+    let catch_body = catch_expr[1].clone();
+
+    scope.env.enable_catching();
+    let value = try_expr.run(scope.env);
+
+    let err = match value {
+        Ok(value) => {
+            scope.env.disable_catching();
+
+            return Ok(Trampoline::returning(value));
+        }
+        Err(err @ RuntimeError::UserError(..)) => err,
+        Err(err) => return Err(err),
+    };
+    let stack = scope.env.unwind();
+
+    scope.env.disable_catching();
+
+    let err = Value::from(Expr::Err(err, stack));
+    let catch_frame = scope.env.last_frame();
+    catch_frame.insert(catch_name, err);
+
+    Ok(Trampoline::returning(catch_body.run(scope.env)?))
+}
+
+pub fn err_print_stack(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).run(scope.env)?;
+
+    let (err, stack) = value.assert_error()?;
+
+    println!("tracing runtime error: {err}");
+    for frame in stack.iter() {
+        let name = frame.name.clone().unwrap_or("unknown".to_string());
+        println!("  in {} at {}", name, frame.location);
+    }
+
+    Ok(Trampoline::returning(value))
 }
 
 pub fn eval(scope: CallScope<'_>) -> Result<Trampoline> {
