@@ -1,4 +1,4 @@
-(import "macros.lisp")
+(import "stdlib.lisp")
 
 (defun foo (x)
   (throw "foo"))
