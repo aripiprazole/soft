@@ -79,3 +79,103 @@ pub fn fn_(scope: CallScope<'_>) -> Result<Trampoline> {
         scope.env.location.clone().into(),
     )))
 }
+
+/*
+self.register_external("nil?", intrinsics::is_nil);
+self.register_external("vec?", intrinsics::is_vec);
+self.register_external("int?", intrinsics::is_int);
+self.register_external("atom?", intrinsics::is_atom);
+self.register_external("function?", intrinsics::is_function);
+self.register_external("err?", intrinsics::is_error);
+
+Implement all of these functions
+*/
+
+/// nil? : a -> bool
+/// Returns true if the value is nil, false otherwise.
+pub fn is_nil(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).is_nil();
+
+    let value = if value {
+        Expr::Id("true".to_string())
+    } else {
+        Expr::Nil
+    };
+
+    Ok(Trampoline::Return(value.into()))
+}
+
+/// vec? : a -> bool
+pub fn is_vec(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).is_vec();
+
+    let value = if value {
+        Expr::Id("true".to_string())
+    } else {
+        Expr::Nil
+    };
+
+    Ok(Trampoline::Return(value.into()))
+}
+
+/// int? : a -> bool
+pub fn is_int(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).is_int();
+
+    let value = if value {
+        Expr::Id("true".to_string())
+    } else {
+        Expr::Nil
+    };
+
+    Ok(Trampoline::Return(value.into()))
+}
+
+/// atom? : a -> bool
+pub fn is_atom(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).is_atom();
+
+    let value = if value {
+        Expr::Id("true".to_string())
+    } else {
+        Expr::Nil
+    };
+
+    Ok(Trampoline::Return(value.into()))
+}
+
+pub fn is_function(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).is_function();
+
+    let value = if value {
+        Expr::Id("true".to_string())
+    } else {
+        Expr::Nil
+    };
+
+    Ok(Trampoline::Return(value.into()))
+}
+
+pub fn is_error(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).is_error();
+
+    let value = if value {
+        Expr::Id("true".to_string())
+    } else {
+        Expr::Nil
+    };
+
+    Ok(Trampoline::Return(value.into()))
+}

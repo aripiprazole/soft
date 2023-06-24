@@ -15,6 +15,44 @@ pub fn print(scope: CallScope<'_>) -> Result<Trampoline> {
     Ok(Trampoline::returning(Expr::Nil))
 }
 
+pub fn read(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(0)?;
+
+    let mut buffer = String::new();
+
+    let Ok(_) = std::io::stdin().read_line(&mut buffer) else {
+        return Err(RuntimeError::from("cannot read from stdin"));
+    };
+
+    Ok(Trampoline::returning(Expr::Str(buffer)))
+}
+
+pub fn read_file(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let path = scope.at(0).assert_string()?;
+
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return Err(RuntimeError::from("cannot read file"));
+    };
+
+    Ok(Trampoline::returning(Expr::Str(contents)))
+}
+
+pub fn parse(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(2)?;
+
+    let contents = scope.at(0).assert_string()?;
+    let path = scope.at(1).assert_string()?;
+
+    let values = reader::read(&contents, Some(path))?;
+
+    Ok(Trampoline::returning(Value::from_iter(
+        values.into_iter(),
+        None,
+    )))
+}
+
 /// import : string -> nil
 pub fn import(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;

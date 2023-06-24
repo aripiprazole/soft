@@ -139,6 +139,7 @@ pub enum Expr {
     Cons(Value, Value),
     Function(Function),
     Err(RuntimeError, Vec<Frame>),
+    Vector(Vec<Value>),
     Nil,
 }
 
@@ -227,6 +228,41 @@ impl Value {
         self.kind.is_nil()
     }
 
+    pub fn is_vec(&self) -> bool {
+        match self.kind {
+            Expr::Vector(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_function(&self) -> bool {
+        match self.kind {
+            Expr::Function(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_error(&self) -> bool {
+        match self.kind {
+            Expr::Err(_, _) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_int(&self) -> bool {
+        match self.kind {
+            Expr::Int(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_atom(&self) -> bool {
+        match self.kind {
+            Expr::Id(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn to_list(&self) -> Option<(Vec<Value>, Option<Value>)> {
         let mut list = Vec::new();
         let mut value = self.clone();
@@ -266,6 +302,13 @@ impl Display for Value {
                 }
                 if let Some(not_nil) = not_nil {
                     write!(f, " . {}", not_nil)?;
+                }
+                write!(f, ")")
+            }
+            Expr::Vector(ref vec, ..) => {
+                write!(f, "(vec")?;
+                for item in vec {
+                    write!(f, " {}", item)?;
                 }
                 write!(f, ")")
             }

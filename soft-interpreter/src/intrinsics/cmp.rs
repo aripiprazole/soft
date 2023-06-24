@@ -50,3 +50,33 @@ pub fn less_than(scope: CallScope<'_>) -> Result<Trampoline> {
 
     Ok(Trampoline::returning(value))
 }
+
+pub fn greater_equal_than(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(2)?;
+
+    let left = scope.at(0).run(scope.env)?.assert_number()?;
+    let right = scope.at(1).run(scope.env)?.assert_number()?;
+
+    let value = if left >= right {
+        Expr::Id("true".to_string())
+    } else {
+        Expr::Nil
+    };
+
+    Ok(Trampoline::returning(value))
+}
+
+pub fn less_equal_than(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(2)?;
+
+    let left = scope.at(0).run(scope.env)?.assert_number()?;
+    let right = scope.at(1).run(scope.env)?.assert_number()?;
+
+    let value = if left <= right {
+        Expr::Id("true".to_string())
+    } else {
+        Expr::Nil
+    };
+
+    Ok(Trampoline::returning(value))
+}

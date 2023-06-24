@@ -101,24 +101,41 @@ impl Environment {
     }
 
     pub fn register_intrinsics(&mut self) {
-        self.register_external("fn*", intrinsics::fn_);
-        self.register_external("set*", intrinsics::set);
-        self.register_external("setm*", intrinsics::setm);
-        self.register_external("if", intrinsics::if_);
-        self.register_external(">", intrinsics::greater_than);
-        self.register_external("<", intrinsics::less_than);
-        self.register_external("+", intrinsics::add);
-        self.register_external("-", intrinsics::sub);
-        self.register_external("idx", intrinsics::idx);
-        self.register_external("expand", intrinsics::expand);
-        self.register_external("quote", intrinsics::quote);
-        self.register_external("cons?", intrinsics::is_cons);
-        self.register_external("print", intrinsics::print);
-        self.register_external("eq", intrinsics::eq);
         self.register_external("head", intrinsics::head);
         self.register_external("tail", intrinsics::tail);
         self.register_external("cons", intrinsics::cons);
         self.register_external("list", intrinsics::list);
+
+        self.register_external("read", intrinsics::read);
+        self.register_external("print", intrinsics::print);
+
+        self.register_external("fn*", intrinsics::fn_);
+        self.register_external("if", intrinsics::if_);
+        self.register_external("set*", intrinsics::set);
+        self.register_external("quote", intrinsics::quote);
+
+        self.register_external("+", intrinsics::add);
+        self.register_external("-", intrinsics::sub);
+        self.register_external("*", intrinsics::mul);
+        self.register_external("/", intrinsics::div);
+
+        self.register_external(">", intrinsics::greater_than);
+        self.register_external("<", intrinsics::less_than);
+        self.register_external("=", intrinsics::eq);
+        self.register_external("<=", intrinsics::greater_equal_than);
+        self.register_external(">=", intrinsics::less_equal_than);
+
+        self.register_external("cons?", intrinsics::is_cons);
+        self.register_external("nil?", intrinsics::is_nil);
+        self.register_external("vec?", intrinsics::is_vec);
+        self.register_external("int?", intrinsics::is_int);
+        self.register_external("atom?", intrinsics::is_atom);
+        self.register_external("function?", intrinsics::is_function);
+        self.register_external("err?", intrinsics::is_error);
+
+        self.register_external("setm*", intrinsics::setm);
+        self.register_external("idx", intrinsics::idx);
+        self.register_external("expand", intrinsics::expand);
         self.register_external("block", intrinsics::block);
         self.register_external("import", intrinsics::import);
         self.register_external("try*", intrinsics::try_);
