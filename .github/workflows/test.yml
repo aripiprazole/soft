@@ -43,7 +43,7 @@ jobs:
       fail-fast: true
       matrix:
         rust:
-          - stable
+          - nightly
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -67,7 +67,7 @@ jobs:
       fail-fast: false
       matrix:
         rust:
-          - stable
+          - nightly
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
@@ -93,7 +93,7 @@ jobs:
       fail-fast: true
       matrix:
         rust:
-          - stable
+          - nightly
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
