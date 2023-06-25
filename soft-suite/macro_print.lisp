@@ -1,3 +1,2 @@
-(set* name (lambda* (x y) '(+ 1 2)))
-(setm* name)
+(setm* name (fn* name (x y) '(+ 1 2)))
 (name 1 2)

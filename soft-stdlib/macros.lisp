@@ -5,7 +5,7 @@
 
 (setm* quasi-quote (fn* quasi-quote (expr)
     (if (cons? expr)
-        (if (eq 'unquote (head expr))
+        (if (= 'unquote (head expr))
             (head (tail expr))
             (cons 'list (map* quasi-quote expr)))
         (list 'quote expr))))
