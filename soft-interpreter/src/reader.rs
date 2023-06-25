@@ -1,10 +1,11 @@
 //! The reader is responsible for parsing the input string into a list of expressions. The reader
 //! main function is [read].
 
-use std::{fmt::Display, iter::Peekable, str::Chars};
-
 use crate::error::{Result, RuntimeError};
 use crate::value::{Expr, Location, Spanned, Value};
+use std::{fmt::Display, iter::Peekable, str::Chars};
+
+use unescape::unescape;
 
 /// A prefix is a symbol that can be at the beggining of an expression. It is used to create quote
 /// and unquote expressions.
@@ -179,7 +180,7 @@ impl<'a> State<'a> {
         if self.advance().is_none() {
             return Err(RuntimeError::UnclosedString(self.position.clone()));
         }
-        self.push(Spanned::new(Expr::Str(string), start.clone().into()).into());
+        self.push(Spanned::new(Expr::Str(unescape(&string).unwrap()), start.clone().into()).into());
         Ok(())
     }
 }

@@ -7,7 +7,7 @@ use crate::value::{CallScope, Expr, Trampoline, Value};
 /// print : a... -> nil
 pub fn print(scope: CallScope<'_>) -> Result<Trampoline> {
     for arg in scope.args.iter() {
-        print!("{}", arg.clone().run(scope.env)?);
+        print!("{}", arg.clone().run(scope.env)?.stringify());
     }
 
     Ok(Trampoline::returning(Expr::Nil))
