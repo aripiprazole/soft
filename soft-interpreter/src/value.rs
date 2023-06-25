@@ -119,12 +119,19 @@ impl Debug for Extern {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum Param {
+    Required(String),
+    Optional(String, Value),
+    Variadic(String),
+}
+
 /// A closure is a function that can be called from the interpreter.
 #[derive(Debug, Clone)]
 pub struct Closure {
     pub name: Option<String>,
     pub frame: Frame,
-    pub params: Vec<String>,
+    pub params: Vec<Param>,
     pub expr: Value,
 }
 
@@ -242,7 +249,7 @@ impl Value {
         }
     }
 
-    pub fn assert_tuple(&self) -> Result<(Value, Value)> {
+    pub fn assert_fixed_size_list(&self, size: usize) -> Result<Vec<Value>> {
         let (list, tail) = self
             .to_list()
             .ok_or_else(|| RuntimeError::ExpectedList(self.to_string()))?;
@@ -251,11 +258,11 @@ impl Value {
             return Err(RuntimeError::ExpectedList(self.to_string()));
         }
 
-        if list.len() != 2 {
+        if list.len() != size {
             return Err(RuntimeError::WrongArity(2, list.len()));
         }
 
-        Ok((list[0].clone(), list[1].clone()))
+        Ok(list)
     }
 
     pub fn assert_number(&self) -> Result<i64> {
@@ -287,45 +294,30 @@ impl Value {
     }
 
     pub fn is_vec(&self) -> bool {
-        match self.kind {
-            Expr::Vector(_) => true,
-            _ => false,
-        }
+        matches!(self.kind, Expr::Vector(_))
     }
 
     pub fn is_function(&self) -> bool {
-        match self.kind {
-            Expr::Function(_) => true,
-            _ => false,
-        }
+        matches!(self.kind, Expr::Function(_))
     }
 
     pub fn is_error(&self) -> bool {
-        match self.kind {
-            Expr::Err(_, _) => true,
-            _ => false,
-        }
+        matches!(self.kind, Expr::Err(_, _))
     }
 
     pub fn is_int(&self) -> bool {
-        match self.kind {
-            Expr::Int(_) => true,
-            _ => false,
-        }
+        matches!(self.kind, Expr::Int(_))
     }
 
     pub fn is_atom(&self) -> bool {
-        match self.kind {
-            Expr::Id(_) => true,
-            _ => false,
-        }
+        matches!(self.kind, Expr::Id(_))
     }
 
     pub fn to_list(&self) -> Option<(Vec<Value>, Option<Value>)> {
         let mut list = Vec::new();
         let mut value = self.clone();
 
-        if !value.kind.is_cons() {
+        if !value.kind.is_cons() && !value.is_nil() {
             return None;
         }
 

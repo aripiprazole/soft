@@ -10,8 +10,6 @@ pub fn print(scope: CallScope<'_>) -> Result<Trampoline> {
         print!("{}", arg.clone().run(scope.env)?);
     }
 
-    println!();
-
     Ok(Trampoline::returning(Expr::Nil))
 }
 
@@ -23,6 +21,8 @@ pub fn read(scope: CallScope<'_>) -> Result<Trampoline> {
     let Ok(_) = std::io::stdin().read_line(&mut buffer) else {
         return Err(RuntimeError::from("cannot read from stdin"));
     };
+
+    buffer.pop();
 
     Ok(Trampoline::returning(Expr::Str(buffer)))
 }

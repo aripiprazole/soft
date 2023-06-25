@@ -1,5 +1,5 @@
-use crate::error::Result;
-use crate::value::{CallScope, Closure, Expr, Function, Spanned, Trampoline, Value};
+use crate::error::{Result, RuntimeError};
+use crate::value::{CallScope, Closure, Expr, Function, Param, Spanned, Trampoline, Value};
 
 /// if : bool -> a -> a -> a
 pub fn if_(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -62,7 +62,27 @@ pub fn fn_(scope: CallScope<'_>) -> Result<Trampoline> {
     let params = params
         .iter()
         .map(Value::assert_identifier)
-        .collect::<Result<_>>()?;
+        .collect::<Result<Vec<_>>>()?;
+
+    let mut iter = params.into_iter();
+
+    let mut params = vec![];
+
+    while let Some(param) = iter.next() {
+        if param == "&rest" {
+            let Some(param) = iter.next() else {
+                return Err(RuntimeError::ExpectedIdentifier("nothing".to_string()));
+            };
+            params.push(Param::Variadic(param));
+        } else if param == "&optional" {
+            let Some(param) = iter.next() else {
+                return Err(RuntimeError::ExpectedIdentifier("nothing".to_string()));
+            };
+            params.push(Param::Optional(param, Value::from(Expr::Nil)))
+        } else {
+            params.push(Param::Required(param));
+        }
+    }
 
     let mut frame = scope.env.last_frame().clone();
     frame.name = Some(name.clone());

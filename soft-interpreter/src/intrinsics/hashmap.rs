@@ -9,15 +9,15 @@ pub fn hash_map(scope: CallScope<'_>) -> Result<Trampoline> {
     let tuples = scope
         .args
         .into_iter()
-        .map(|x| x.assert_tuple())
+        .map(|x| x.assert_fixed_size_list(2))
         .collect::<Result<Vec<_>>>()?;
 
     let mut map = FxHashMap::default();
 
     for tuple in tuples {
-        let key_val = tuple.0.run(scope.env)?;
+        let key_val = tuple[0].clone().run(scope.env)?;
         let key = key_val.stringify();
-        let value = tuple.1.run(scope.env)?;
+        let value = tuple[1].clone().run(scope.env)?;
 
         map.insert(key, (key_val, value));
     }

@@ -3,7 +3,37 @@
 
 use crate::environment::Environment;
 use crate::error::{Result, RuntimeError};
-use crate::value::{CallScope, Closure, Expr, Function, Trampoline, Value};
+use crate::value::{CallScope, Closure, Expr, Function, Param, Trampoline, Value};
+
+pub fn match_parameters(params: &[Param], args: &[Value]) -> Result<Vec<(String, Value)>> {
+    let mut iter = args.iter().cloned();
+    let mut result = vec![];
+
+    for param in params {
+        match param {
+            Param::Required(name) => {
+                let Some(value) = iter.next() else {
+                    return Err(RuntimeError::WrongArity(params.len(), args.len()));
+                };
+                result.push((name.clone(), value.clone()));
+            }
+            Param::Optional(name, def) => {
+                let value = iter.next().unwrap_or(def.clone());
+                result.push((name.clone(), value));
+            }
+            Param::Variadic(name) => {
+                result.push((name.clone(), Value::from_iter(iter, None)));
+                return Ok(result);
+            }
+        }
+    }
+
+    if iter.next().is_some() {
+        Err(RuntimeError::WrongArity(params.len(), args.len()))
+    } else {
+        Ok(result)
+    }
+}
 
 impl Closure {
     pub fn apply(&self, args: Vec<Value>, env: &mut Environment) -> Result<Trampoline> {
@@ -18,15 +48,13 @@ impl Closure {
         env.push(self.frame.name.clone(), false, env.location.clone());
 
         'first: loop {
-            if apply.params.len() != args.len() {
-                return Err(RuntimeError::WrongArity(self.params.len(), args.len()));
-            }
+            let params = match_parameters(&apply.params, &args)?;
 
             let frame = env.last_frame();
             frame.location = location.clone();
             *frame = self.frame.clone();
 
-            for (name, value) in self.params.iter().zip(args.iter().cloned()) {
+            for (name, value) in params {
                 frame.insert(name.clone(), value);
             }
 
