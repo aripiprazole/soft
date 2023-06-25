@@ -1,5 +1,6 @@
 pub use cmp::*;
 pub use env::*;
+pub use ffi::*;
 pub use hashmap::*;
 pub use io::*;
 pub use list::*;
@@ -11,6 +12,7 @@ pub use vec::*;
 
 pub mod cmp;
 pub mod env;
+pub mod ffi;
 pub mod hashmap;
 pub mod io;
 pub mod list;

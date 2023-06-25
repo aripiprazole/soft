@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use fxhash::FxHashMap;
 
 use crate::{
     error::{Result, RuntimeError},
@@ -6,18 +6,13 @@ use crate::{
 };
 
 pub fn hash_map(scope: CallScope<'_>) -> Result<Trampoline> {
-    let args = scope
+    let tuples = scope
         .args
-        .into_iter()
-        .map(|x| x.run(scope.env))
-        .collect::<Result<Vec<_>>>()?;
-
-    let tuples = args
         .into_iter()
         .map(|x| x.assert_tuple())
         .collect::<Result<Vec<_>>>()?;
 
-    let mut map = HashMap::new();
+    let mut map = FxHashMap::default();
 
     for tuple in tuples {
         let key_val = tuple.0.run(scope.env)?;

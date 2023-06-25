@@ -6,5 +6,6 @@ version = "0.0.1"
 [dependencies]
 fxhash = "0.2.1"
 im-rc = "15.1.0"
+libc = "0.2.146"
 pathdiff = "0.2.1"
 thiserror = "1.0.40"

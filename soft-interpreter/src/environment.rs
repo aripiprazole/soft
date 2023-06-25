@@ -112,6 +112,7 @@ impl Environment {
 
         self.register_external("fn*", intrinsics::fn_);
         self.register_external("if", intrinsics::if_);
+        self.register_external("let", intrinsics::letm);
         self.register_external("set*", intrinsics::set);
         self.register_external("setm*", intrinsics::setm);
         self.register_external("quote", intrinsics::quote);
@@ -165,6 +166,10 @@ impl Environment {
 
         self.register_external("try*", intrinsics::try_);
         self.register_external("throw", intrinsics::throw);
+
+        self.register_external("ffi/open", intrinsics::ffi_open);
+        self.register_external("ffi/get", intrinsics::ffi_get);
+        self.register_external("ffi/apply", intrinsics::ffi_apply);
     }
 
     pub fn find(&self, id: &str) -> Option<Value> {

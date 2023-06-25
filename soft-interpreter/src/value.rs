@@ -1,9 +1,10 @@
 //! This module defines the values that are used by the interpreter.
 
+use fxhash::FxHashMap;
+
 use crate::environment::{Environment, Frame};
 use crate::error::{Result, RuntimeError};
 
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::{
     cell::UnsafeCell,
@@ -103,6 +104,8 @@ impl CallScope<'_> {
 
 pub type Prim = fn(CallScope<'_>) -> Result<Trampoline>;
 
+pub type External = fn(*const u64) -> Result<Trampoline>;
+
 /// External functions that can be called from the interpreter.
 #[derive(Clone)]
 pub struct Extern {
@@ -131,6 +134,12 @@ pub enum Function {
     Closure(Closure),
 }
 
+#[derive(Debug, Clone)]
+pub enum Type {
+    Int,
+    String,
+}
+
 /// An expression is a value that can be evaluated to produce another expression.
 #[derive(Debug)]
 pub enum Expr {
@@ -141,7 +150,9 @@ pub enum Expr {
     Function(Function),
     Err(RuntimeError, Vec<Frame>),
     Vector(Vec<Value>),
-    HashMap(HashMap<String, (Value, Value)>),
+    HashMap(FxHashMap<String, (Value, Value)>),
+    Library(*mut libc::c_void),
+    External(*mut libc::c_void, Vec<Type>),
     Nil,
 }
 
@@ -187,6 +198,15 @@ impl Value {
         }
     }
 
+    pub fn assert_library(&self) -> Result<*mut libc::c_void> {
+        match self.kind {
+            Expr::Library(lib) => Ok(lib),
+            _ => Err(RuntimeError::UserError(
+                Expr::Str(format!("expected library, got {}", self.to_string())).into(),
+            )),
+        }
+    }
+
     pub fn assert_error(&self) -> Result<(RuntimeError, Vec<Frame>)> {
         match self.kind {
             Expr::Err(ref err, ref stack) => Ok((err.clone(), stack.clone())),
@@ -211,6 +231,15 @@ impl Value {
         }
 
         Ok(list)
+    }
+
+    pub fn assert_external(&self) -> Result<(*mut libc::c_void, Vec<Type>)> {
+        match &self.kind {
+            Expr::External(ptr, ty) => Ok((*ptr, ty.clone())),
+            _ => Err(RuntimeError::UserError(
+                Expr::Str(format!("expected external, got {}", self.to_string())).into(),
+            )),
+        }
     }
 
     pub fn assert_tuple(&self) -> Result<(Value, Value)> {
@@ -351,6 +380,8 @@ impl Display for Value {
                 }
                 write!(f, ")")
             }
+            Expr::Library(_) => write!(f, "<library>"),
+            Expr::External(_, _) => write!(f, "<external>"),
         }
     }
 }
