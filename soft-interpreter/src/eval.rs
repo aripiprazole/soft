@@ -51,16 +51,16 @@ impl Closure {
             let params = match_parameters(&apply.params, &args)?;
 
             let frame = env.last_frame();
+            *frame = apply.frame.clone();
             frame.location = location.clone();
-            *frame = self.frame.clone();
 
             for (name, value) in params {
                 frame.insert(name.clone(), value);
             }
 
-            location = self.expr.span.clone().unwrap_or(location);
+            location = apply.expr.span.clone().unwrap_or(location);
 
-            ret = self.expr.clone().expand(env)?;
+            ret = apply.expr.clone().expand(env)?;
 
             'snd: loop {
                 match &ret.kind {
@@ -78,7 +78,9 @@ impl Closure {
                                     .into_iter()
                                     .map(|arg| arg.run(env))
                                     .collect::<Result<Vec<_>>>()?;
+
                                 apply = closure;
+
                                 break;
                             }
                             Expr::Function(Function::Extern(extern_)) => {
@@ -90,7 +92,7 @@ impl Closure {
                                 let result = (extern_)(scope)?;
                                 match result {
                                     Trampoline::Eval(retu) => {
-                                        ret = retu;
+                                        ret = retu.expand(env)?;
                                         continue 'snd;
                                     }
                                     Trampoline::Return(result) => {
@@ -151,12 +153,7 @@ impl Value {
         self = self.expand(env)?;
 
         match &self.kind {
-            Expr::Id(name) => {
-                let Some(result) = env.find(name) else {
-                    return Err(RuntimeError::UndefinedName(name.clone()));
-                };
-                Ok(Trampoline::Return(result))
-            }
+            Expr::Id(name) => Ok(Trampoline::Return(env.find(name)?)),
             Expr::Cons(head, tail) => {
                 let (args, end) = tail.to_list().unwrap();
                 if let Some(end) = end {

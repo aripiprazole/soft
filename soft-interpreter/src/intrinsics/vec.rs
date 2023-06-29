@@ -3,7 +3,7 @@ use crate::{
     value::{CallScope, Expr, Trampoline},
 };
 
-pub fn vec_index(scope: CallScope<'_>) -> Result<Trampoline> {
+pub fn vec_get(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(2)?;
 
     let vec = scope.at(0).run(scope.env)?;

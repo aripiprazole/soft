@@ -2,7 +2,7 @@ use fxhash::FxHashMap;
 
 use crate::{
     error::{Result, RuntimeError},
-    value::{CallScope, Expr, Trampoline},
+    value::{CallScope, Expr, Trampoline, Value},
 };
 
 pub fn hash_map(scope: CallScope<'_>) -> Result<Trampoline> {
@@ -75,7 +75,10 @@ pub fn hash_map_keys(scope: CallScope<'_>) -> Result<Trampoline> {
         Expr::HashMap(ref map) => {
             let keys = map.values().map(|x| x.0.clone()).collect::<Vec<_>>();
 
-            Ok(Trampoline::returning(Expr::Vector(keys)))
+            Ok(Trampoline::returning(Value::from_iter(
+                keys.into_iter(),
+                None,
+            )))
         }
         _ => Err(RuntimeError::from("expected hash-map")),
     }
@@ -92,7 +95,10 @@ pub fn hash_map_vals(scope: CallScope<'_>) -> Result<Trampoline> {
         Expr::HashMap(ref map) => {
             let values = map.values().map(|x| x.1.clone()).collect::<Vec<_>>();
 
-            Ok(Trampoline::returning(Expr::Vector(values)))
+            Ok(Trampoline::returning(Value::from_iter(
+                values.into_iter(),
+                None,
+            )))
         }
         _ => Err(RuntimeError::from("expected hash-map")),
     }

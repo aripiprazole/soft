@@ -132,6 +132,7 @@ pub struct Closure {
     pub name: Option<String>,
     pub frame: Frame,
     pub params: Vec<Param>,
+    pub location: Option<Location>,
     pub expr: Value,
 }
 
@@ -154,6 +155,7 @@ pub enum Expr {
     Id(String),
     Str(String),
     Cons(Value, Value),
+    Atom(String),
     Function(Function),
     Err(RuntimeError, Vec<Frame>),
     Vector(Vec<Value>),
@@ -183,6 +185,18 @@ impl Expr {
 pub struct Value(Rc<UnsafeCell<Spanned<Expr>>>);
 
 impl Value {
+    pub fn quote(self) -> Value {
+        Expr::Cons(
+            Expr::Id("quote".to_string()).to_value(),
+            Expr::Cons(self, Expr::Nil.into()).to_value(),
+        )
+        .into()
+    }
+
+    pub fn is_cons(self) -> bool {
+        self.borrow_mut().kind.is_cons()
+    }
+
     pub fn stringify(&self) -> String {
         match self.kind {
             Expr::Str(ref string) => string.clone(),
@@ -249,6 +263,24 @@ impl Value {
         }
     }
 
+    pub fn assert_vector(&self) -> Result<Vec<Value>> {
+        match self.kind {
+            Expr::Vector(ref vector) => Ok(vector.clone()),
+            _ => Err(RuntimeError::UserError(
+                Expr::Str(format!("expected vector, got {}", self.to_string())).into(),
+            )),
+        }
+    }
+
+    pub fn assert_atom(&self) -> Result<String> {
+        match self.kind {
+            Expr::Atom(ref atom) => Ok(atom.clone()),
+            _ => Err(RuntimeError::UserError(
+                Expr::Str(format!("expected atom, got {}", self.to_string())).into(),
+            )),
+        }
+    }
+
     pub fn assert_fixed_size_list(&self, size: usize) -> Result<Vec<Value>> {
         let (list, tail) = self
             .to_list()
@@ -287,6 +319,22 @@ impl Value {
         }
 
         value
+    }
+
+    pub fn to_bool(&self) -> bool {
+        match &self.kind {
+            Expr::Nil => false,
+            Expr::Atom(x) if x == "false" => false,
+            _ => true,
+        }
+    }
+
+    pub fn from_bool(cond: bool) -> Value {
+        if cond {
+            Expr::Id("true".to_string()).into()
+        } else {
+            Expr::Nil.into()
+        }
     }
 
     pub fn is_nil(&self) -> bool {
@@ -340,7 +388,8 @@ impl Display for Value {
         match self.kind {
             Expr::Int(int) => write!(f, "{}", int),
             Expr::Id(ref id) => write!(f, "{}", id),
-            Expr::Str(ref string) => write!(f, "\"{}\"", string),
+            Expr::Atom(ref id) => write!(f, ":{}", id),
+            Expr::Str(ref string) => write!(f, "\"{}\"", string.escape_default()),
             Expr::Cons(..) => {
                 let (list, not_nil) = self.to_list().unwrap();
                 write!(f, "(")?;

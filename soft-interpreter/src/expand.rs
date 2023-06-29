@@ -13,13 +13,12 @@ use crate::error::Result;
 
 impl Value {
     pub fn expand(self, env: &mut Environment) -> Result<Value> {
-        env.set_location(self.span.clone());
         let mut expr = self;
         loop {
             match &expr.kind {
                 Id(name) => match env.get_def(name) {
-                    Some(def) => expr = def.value.clone(),
-                    None => return Ok(expr),
+                    Ok(def) if def.is_macro => expr = def.value.clone(),
+                    _ => return Ok(expr),
                 },
                 Cons(head, tail) => match &head.kind {
                     Id(name) if env.get_def(name).map(|x| x.is_macro).unwrap_or(false) => {
@@ -31,7 +30,7 @@ impl Value {
                             return Err(ExpectedList(end.to_string()));
                         }
 
-                        let head = env.get_def(name).cloned().unwrap();
+                        let head = env.get_def(name).unwrap();
 
                         match &head.value.kind {
                             Function(function) => match function.apply(args, env, false) {

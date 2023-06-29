@@ -1,5 +1,5 @@
 use crate::error::Result;
-use crate::value::{CallScope, Expr, Trampoline};
+use crate::value::{CallScope, Expr, Trampoline, Value};
 
 pub fn string_length(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
@@ -52,4 +52,36 @@ pub fn string_split(scope: CallScope<'_>) -> Result<Trampoline> {
         .collect();
 
     Ok(Trampoline::returning(Expr::Vector(value)))
+}
+
+pub fn string_index(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(2)?;
+
+    let value = scope.at(0).run(scope.env)?.assert_string()?;
+    let idx = scope.at(1).run(scope.env)?.assert_number()? as usize;
+
+    let value: Value = value
+        .chars()
+        .nth(idx)
+        .map(|c| Expr::Str(c.to_string()).into())
+        .unwrap_or(Expr::Nil.into());
+
+    Ok(Trampoline::returning(value))
+}
+
+pub fn string_contains(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(2)?;
+
+    let value = scope.at(0).run(scope.env)?.assert_string()?;
+    let substring = scope.at(1).run(scope.env)?.assert_string()?;
+
+    let value = value.contains(&substring);
+
+    let value = if value {
+        Expr::Id("true".to_string())
+    } else {
+        Expr::Nil
+    };
+
+    Ok(Trampoline::returning(value.to_value()))
 }

@@ -14,7 +14,7 @@ fn main() {
     let file = args[0].clone();
 
     let Ok(code) = std::fs::read_to_string(&file) else {
-        eprintln!("Error: could not read file '{}'", &file);
+        eprintln!("error: could not read file '{}'", &file);
         return;
     };
 

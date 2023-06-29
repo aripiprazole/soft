@@ -42,7 +42,7 @@ pub fn head(scope: CallScope<'_>) -> Result<Trampoline> {
 
     match &value.kind {
         Expr::Cons(head, _) => Ok(Trampoline::Return(head.clone())),
-        _ => Err(RuntimeError::ExpectedList(value.to_string())),
+        _ => Ok(Trampoline::Return(Expr::Nil.into())),
     }
 }
 
@@ -54,7 +54,7 @@ pub fn tail(scope: CallScope<'_>) -> Result<Trampoline> {
 
     match &value.kind {
         Expr::Cons(_, tail) => Ok(Trampoline::returning(tail.clone())),
-        _ => Err(RuntimeError::ExpectedList(value.to_string())),
+        _ => Ok(Trampoline::Return(Expr::Nil.into())),
     }
 }
 

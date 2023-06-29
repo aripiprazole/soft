@@ -24,7 +24,7 @@ pub fn block(scope: CallScope<'_>) -> Result<Trampoline> {
         arg.run(scope.env)?;
     }
 
-    Ok(Trampoline::eval(last.clone()))
+    Ok(Trampoline::returning(last.clone().run(scope.env)?))
 }
 
 /// expand : expr -> expr
@@ -47,7 +47,7 @@ pub fn quote(scope: CallScope<'_>) -> Result<Trampoline> {
 /// eval : expr -> expr
 pub fn eval(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
-    let expr = scope.at(0);
+    let expr = scope.at(0).run(scope.env)?;
     Ok(Trampoline::Eval(expr))
 }
 
@@ -91,6 +91,7 @@ pub fn fn_(scope: CallScope<'_>) -> Result<Trampoline> {
         name: Some(name),
         frame,
         params,
+        location: scope.location.clone(),
         expr: value,
     };
 
@@ -100,11 +101,24 @@ pub fn fn_(scope: CallScope<'_>) -> Result<Trampoline> {
     )))
 }
 
+pub fn apply(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(2)?;
+
+    let function = scope.at(0).run(scope.env)?;
+    let args = scope.at(1).run(scope.env)?.assert_list()?;
+
+    let mut args = args.into_iter().map(|x| x.quote()).collect::<Vec<_>>();
+
+    args.insert(0, function);
+
+    Ok(Trampoline::Eval(Value::from_iter(args.into_iter(), None)))
+}
+
 /// nil? : a -> bool
 pub fn is_nil(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
 
-    let value = scope.at(0).is_nil();
+    let value = scope.at(0).run(scope.env)?.is_nil();
 
     let value = if value {
         Expr::Id("true".to_string())
@@ -119,7 +133,7 @@ pub fn is_nil(scope: CallScope<'_>) -> Result<Trampoline> {
 pub fn is_vec(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
 
-    let value = scope.at(0).is_vec();
+    let value = scope.at(0).run(scope.env)?.is_vec();
 
     let value = if value {
         Expr::Id("true".to_string())
@@ -134,7 +148,7 @@ pub fn is_vec(scope: CallScope<'_>) -> Result<Trampoline> {
 pub fn is_int(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
 
-    let value = scope.at(0).is_int();
+    let value = scope.at(0).run(scope.env)?.is_int();
 
     let value = if value {
         Expr::Id("true".to_string())
@@ -149,7 +163,7 @@ pub fn is_int(scope: CallScope<'_>) -> Result<Trampoline> {
 pub fn is_atom(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
 
-    let value = scope.at(0).is_atom();
+    let value = scope.at(0).run(scope.env)?.is_atom();
 
     let value = if value {
         Expr::Id("true".to_string())
@@ -188,6 +202,29 @@ pub fn is_error(scope: CallScope<'_>) -> Result<Trampoline> {
     Ok(Trampoline::Return(value.into()))
 }
 
+pub fn type_of(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).run(scope.env)?;
+
+    let typ = match value.kind {
+        Expr::Nil => "nil",
+        Expr::Int(_) => "int",
+        Expr::Str(_) => "str",
+        Expr::Id(_) => "id",
+        Expr::Cons(_, _) => "cons",
+        Expr::Function(_) => "function",
+        Expr::Err(_, _) => "error",
+        Expr::Atom(_) => "atom",
+        Expr::Vector(_) => "vector",
+        Expr::HashMap(_) => "hashmap",
+        Expr::Library(_) => "library",
+        Expr::External(_, _) => "external",
+    };
+
+    Ok(Trampoline::returning(Expr::Atom(typ.to_owned())))
+}
+
 pub fn to_string(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
 
@@ -212,4 +249,41 @@ pub fn to_int(scope: CallScope<'_>) -> Result<Trampoline> {
     let value = value.parse::<i64>().unwrap_or_default();
 
     Ok(Trampoline::returning(Expr::Int(value)))
+}
+
+pub fn environment(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(0)?;
+
+    let env = scope.env.global.clone();
+
+    Ok(Trampoline::returning(env))
+}
+
+pub fn call(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+    let name = scope.at(0).assert_identifier()?;
+    let value = scope.env.find(&name)?;
+    Ok(Trampoline::Return(value))
+}
+
+pub fn and(scope: CallScope<'_>) -> Result<Trampoline> {
+    let mut ret = true;
+
+    for arg in scope.args.into_iter() {
+        let value = arg.run(scope.env)?.to_bool();
+        ret = ret && value;
+    }
+
+    Ok(Trampoline::returning(Value::from_bool(ret)))
+}
+
+pub fn or(scope: CallScope<'_>) -> Result<Trampoline> {
+    let mut ret = false;
+
+    for arg in scope.args.into_iter() {
+        let value = arg.run(scope.env)?.to_bool();
+        ret = ret || value;
+    }
+
+    Ok(Trampoline::returning(Value::from_bool(ret)))
 }

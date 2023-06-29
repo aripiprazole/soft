@@ -13,6 +13,18 @@ pub fn print(scope: CallScope<'_>) -> Result<Trampoline> {
     Ok(Trampoline::returning(Expr::Nil))
 }
 
+pub fn flush(scope: CallScope<'_>) -> Result<Trampoline> {
+    use std::io::Write;
+
+    scope.assert_arity(0)?;
+
+    let Ok(_) = std::io::stdout().flush() else {
+        return Err(RuntimeError::from("cannot flush stdout"));
+    };
+
+    Ok(Trampoline::returning(Expr::Nil))
+}
+
 pub fn read(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(0)?;
 

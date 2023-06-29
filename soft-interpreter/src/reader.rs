@@ -12,6 +12,7 @@ use unescape::unescape;
 enum Prefix {
     Quote,
     Unquote,
+    QuasiQuote,
 }
 
 impl Display for Prefix {
@@ -19,6 +20,7 @@ impl Display for Prefix {
         match self {
             Prefix::Quote => write!(f, "quote"),
             Prefix::Unquote => write!(f, "unquote"),
+            Prefix::QuasiQuote => write!(f, "quasi-quote"),
         }
     }
 }
@@ -135,6 +137,10 @@ impl<'a> State<'a> {
                     self.prefix(start, Prefix::Unquote);
                     continue;
                 }
+                '~' => {
+                    self.prefix(start, Prefix::QuasiQuote);
+                    continue;
+                }
                 ';' => {
                     self.parse_comment();
                     continue;
@@ -165,6 +171,8 @@ impl<'a> State<'a> {
 
         if let Ok(int) = string.parse::<i64>() {
             self.push(Spanned::new(Expr::Int(int), start.into()).into());
+        } else if let Some(string) = string.strip_prefix(':') {
+            self.push(Spanned::new(Expr::Atom(string.to_string()), start.into()).into());
         } else {
             self.push(Spanned::new(Expr::Id(string), start.into()).into());
         }

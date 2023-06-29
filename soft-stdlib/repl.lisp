@@ -1,5 +1,6 @@
 (import "stdlib.lisp")
 
-(let x (read))
-
-(print x)
+(unless ()
+    (print "hello")
+    (print "world")
+    (print "\n"))

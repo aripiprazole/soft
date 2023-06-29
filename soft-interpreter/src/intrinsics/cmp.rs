@@ -13,6 +13,7 @@ pub fn eq(scope: CallScope<'_>) -> Result<Trampoline> {
     let result = match (&left.kind, &right.kind) {
         (Expr::Int(left), Expr::Int(right)) => left == right,
         (Expr::Id(left), Expr::Id(right)) => left == right,
+        (Expr::Atom(left), Expr::Atom(right)) => left == right,
         (Expr::Str(left), Expr::Str(right)) => left == right,
         (Expr::Nil, Expr::Nil) => true,
         _ => false,
