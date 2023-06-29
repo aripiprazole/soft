@@ -391,8 +391,20 @@ impl Display for Value {
             Expr::Atom(ref id) => write!(f, ":{}", id),
             Expr::Str(ref string) => write!(f, "\"{}\"", string.escape_default()),
             Expr::Cons(..) => {
-                let (list, not_nil) = self.to_list().unwrap();
-                write!(f, "(")?;
+                let (mut list, not_nil) = self.to_list().unwrap();
+                let is_list_literal = if !list.is_empty() {
+                    let head = list.first().unwrap().clone();
+                    if matches!(&head.kind, Expr::Id(id) if id == "list") {
+                        list.remove(0);
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                write!(f, "{}", if is_list_literal { "[" } else { "(" })?;
                 if !list.is_empty() {
                     write!(f, "{}", list[0])?;
                     for item in &list[1..] {
@@ -402,7 +414,7 @@ impl Display for Value {
                 if let Some(not_nil) = not_nil {
                     write!(f, " . {}", not_nil)?;
                 }
-                write!(f, ")")
+                write!(f, "{}", if is_list_literal { "]" } else { ")" })
             }
             Expr::Vector(ref vec, ..) => {
                 write!(f, "(vec")?;

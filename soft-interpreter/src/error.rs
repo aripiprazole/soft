@@ -23,6 +23,9 @@ pub enum RuntimeError {
     #[error("unmatched quote")]
     UnmatchedQuote(Location),
 
+    #[error("unmatched delimiter")]
+    UnmatchedDelimiter(Location),
+
     #[error("wrong arity, expected {0} arguments, got {1}")]
     WrongArity(usize, usize),
 

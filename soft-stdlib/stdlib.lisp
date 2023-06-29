@@ -1,25 +1,14 @@
 (import "macros.lisp")
 (import "list.lisp")
 
+(defun hash-map/pairs (map)
+  (list/zip (hash-map/keys map) (hash-map/vals map)))
 
 (defun pair (a b) (list a b))
 
 (defun fst (pair) (head pair))
 
 (defun snd (pair) (head (tail pair)))
-
-(defun list/ref (list index) 
-  (if (= index 0) (head list) (list/ref (tail list) (- index 1))))
-
-(defun list/is? (list) (if (= (type-of list) :cons) :true ()))
-
-(defun list/zip (a b)
-  (if (or (nil? a) (nil? b)) 
-    ()
-    (cons (pair (head a) (head b)) (list/zip (tail a) (tail b)))))
-
-(defun hash-map/pairs (map)
-  (list/zip (hash-map/keys map) (hash-map/vals map)))
 
 (defun not (x) (if x () :true))
 
@@ -66,7 +55,3 @@
   ~(block 
       (let #cond `scrutinee)
       `(cons 'case (list/concat cases '(('else (throw "match: no match")))))))
-
-(match (list 'x (list 10 20))
-  ((list x (list* y)) (print y))
-  (2 (print "ata")))

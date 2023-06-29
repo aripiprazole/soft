@@ -25,11 +25,17 @@ impl Display for Prefix {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Delimiter {
+    Paren,
+    Bracket,
+}
+
 /// A state is a mutable object that is used to keep track of the current state of the reader.
 pub struct State<'a> {
     peekable: Peekable<Chars<'a>>,
     stack: Vec<Value>,
-    indices: Vec<usize>,
+    indices: Vec<(usize, Delimiter)>,
     prefix: Vec<(Prefix, Location, usize)>,
     position: Location,
 }
@@ -67,17 +73,28 @@ impl<'a> State<'a> {
         self.stack.push(value);
     }
 
-    fn open(&mut self) {
-        self.indices.push(self.stack.len());
+    fn open(&mut self, delimiter: Delimiter) {
+        self.indices.push((self.stack.len(), delimiter));
     }
 
-    fn close(&mut self) {
-        let index = self.indices.pop().unwrap();
-        let values = self.stack.split_off(index);
+    fn close(&mut self, delimiter: Delimiter) -> Result<()> {
+        let (index, first_delimiter) = self.indices.pop().unwrap();
+        let mut values = self.stack.split_off(index);
+
+        if first_delimiter != delimiter {
+            return Err(RuntimeError::UnmatchedDelimiter(self.position.clone()));
+        }
+
+        if let Delimiter::Bracket = delimiter {
+            let position = self.position.clone().into();
+            let head = Value::from(Spanned::new(Expr::Id("list".into()), position));
+            values.insert(0, head);
+        }
 
         let expr = Value::from_iter(values.into_iter(), self.position.clone().into());
-
         self.stack.push(expr);
+
+        Ok(())
     }
 
     fn prefix(&mut self, start: Location, prefix: Prefix) {
@@ -145,8 +162,10 @@ impl<'a> State<'a> {
                     self.parse_comment();
                     continue;
                 }
-                '(' => self.open(),
-                ')' => self.close(),
+                '(' => self.open(Delimiter::Paren),
+                ')' => self.close(Delimiter::Paren)?,
+                '[' => self.open(Delimiter::Bracket),
+                ']' => self.close(Delimiter::Bracket)?,
                 '"' => self.parse_string(&start)?,
                 _ => self.parse_rest(start, chr),
             }
@@ -166,7 +185,7 @@ impl<'a> State<'a> {
 
     fn parse_rest(&mut self, start: Location, chr: char) {
         let string = self.accumulate_while(Some(chr), |c| {
-            !matches!(c, '\n' | '\r' | '\t' | ' ' | ')' | '(' | '"')
+            !matches!(c, '\n' | '\r' | '\t' | ' ' | ')' | '(' | '[' | ']' | '"')
         });
 
         if let Ok(int) = string.parse::<i64>() {

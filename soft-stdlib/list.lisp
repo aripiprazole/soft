@@ -48,3 +48,13 @@
     (if (cons? list)
         (f (head list) (list/fold (tail list) init f))
         init))
+
+(defun list/ref (list index) 
+  (if (= index 0) (head list) (list/ref (tail list) (- index 1))))
+
+(defun list/is? (list) (if (= (type-of list) :cons) :true ()))
+
+(defun list/zip (a b)
+  (if (or (nil? a) (nil? b)) 
+    ()
+    (cons (pair (head a) (head b)) (list/zip (tail a) (tail b)))))

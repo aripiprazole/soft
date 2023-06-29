@@ -120,6 +120,8 @@ impl Environment {
         self.register_external("read", intrinsics::read);
         self.register_external("flush", intrinsics::flush);
         self.register_external("print", intrinsics::print);
+        self.register_external("read-file", intrinsics::read_file);
+        self.register_external("parse", intrinsics::parse);
         self.register_external("import", intrinsics::import);
 
         self.register_external("and", intrinsics::and);

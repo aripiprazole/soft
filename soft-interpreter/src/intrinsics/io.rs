@@ -42,7 +42,7 @@ pub fn read(scope: CallScope<'_>) -> Result<Trampoline> {
 pub fn read_file(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
 
-    let path = scope.at(0).assert_string()?;
+    let path = scope.at(0).run(scope.env)?.assert_string()?;
 
     let Ok(contents) = std::fs::read_to_string(path) else {
         return Err(RuntimeError::from("cannot read file"));
@@ -54,8 +54,8 @@ pub fn read_file(scope: CallScope<'_>) -> Result<Trampoline> {
 pub fn parse(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(2)?;
 
-    let contents = scope.at(0).assert_string()?;
-    let path = scope.at(1).assert_string()?;
+    let contents = scope.at(0).run(scope.env)?.assert_string()?;
+    let path = scope.at(1).run(scope.env)?.assert_string()?;
 
     let values = reader::read(&contents, Some(path))?;
 
