@@ -76,8 +76,3 @@
 
 (defmacro lambda (args &rest body)
     (quasi-quote (fn* unknown `args `(cons 'block body))))    
-
-(defun match/matrix (cases) 
-    (map* 
-        (lambda (case) (cons (list (head case)) (tail case)))
-        cases))
