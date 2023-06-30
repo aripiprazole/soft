@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     error::Result,
     value::{CallScope, Expr, Trampoline, Value},
@@ -46,21 +48,46 @@ pub struct Atom {
 }
 
 pub enum Pattern {
-    Identifier(Atom),    // `x
-    Rest(Atom),          // &rest `x
-    List(Vec<Pattern>),  // [..]
-    Tuple(Vec<Pattern>), // (..)
+    Identifier(Atom),   // `x
+    Rest(Atom),         // &rest `x
+    List(Vec<Pattern>), // [..]
 
     Int(Atom), // (int `x)
     Str(Atom), // (str `x)
+    Id(Atom),
 }
 
 pub struct Case {
     pub pattern: Pattern,
-    pub body: Value,
+    pub body: Vec<Value>,
+}
+
+impl Pattern {
+    pub fn matches(&self, bindings: &mut HashMap<String, Value>, value: Value) {
+        match (self, value) {
+            (Pattern::Identifier(atom), value) => {
+                bindings.insert(atom.name.clone(), value);
+            }
+            _ => {}
+        }
+    }
 }
 
 impl Case {
+    pub fn from_value(value: Value) -> Option<Self> {
+        let Some((values, None)) = value.to_list() else {
+            return None;
+        };
+
+        let (pattern, body) = values.split_first()?;
+        let pattern = Pattern::from(pattern.clone());
+
+        Some(Self {
+            pattern,
+            body: body.to_vec(),
+        })
+    }
+
     pub fn run(&self, scope: CallScope<'_>, scrutinee: Value) -> Result<Option<Value>> {
         todo!()
     }
@@ -69,31 +96,28 @@ impl Case {
 impl From<Value> for Pattern {
     fn from(value: Value) -> Self {
         match &value.kind {
-            Expr::Int(_) => todo!(),
-            Expr::Id(_) => todo!(),
-            Expr::Str(_) => todo!(),
+            Expr::Id(name) => Pattern::Identifier(Atom {
+                name: name.to_string(),
+                unquote: false,
+            }),
             Expr::Cons(_, _) => {
                 let (head, None) = value.to_list().unwrap() else {
                     todo!()
                 };
+
                 let Some(callee) = head.first() else {
-                    return Pattern::Tuple(vec![]);
+                    return Pattern::List(vec![]);
                 };
 
                 match &callee.kind {
                     Expr::Id(name) if name == "int" => todo!(),
                     Expr::Id(name) if name == "str" => todo!(),
-                    _ => Pattern::Tuple(head.into_iter().map(|x| x.into()).collect()),
+                    Expr::Id(name) if name == "unquote" => todo!(),
+                    Expr::Id(name) if name == "list" => todo!(),
+                    _ => Pattern::List(head.into_iter().map(|x| x.into()).collect()),
                 }
             }
-            Expr::Atom(_) => todo!(),
-            Expr::Function(_) => todo!(),
-            Expr::Err(_, _) => todo!(),
-            Expr::Vector(_) => todo!(),
-            Expr::HashMap(_) => todo!(),
-            Expr::Library(_) => todo!(),
-            Expr::External(_, _) => todo!(),
-            Expr::Nil => todo!(),
+            _ => todo!(),
         }
     }
 }
