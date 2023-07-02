@@ -5,10 +5,10 @@ use fxhash::FxHashMap;
 use crate::environment::{Environment, Frame};
 use crate::error::{Result, RuntimeError};
 
-use std::fmt::Debug;
+use core::fmt;
+use std::fmt::{Debug, Display, Formatter};
 use std::{
     cell::UnsafeCell,
-    fmt::Display,
     ops::{Deref, DerefMut},
     rc::Rc,
 };
@@ -58,7 +58,7 @@ impl Display for Location {
 }
 
 /// A value is a type that can be used by the interpreter.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Spanned<T> {
     pub kind: T,
     pub span: Option<Location>,
@@ -136,7 +136,7 @@ pub struct Closure {
     pub expr: Value,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Function {
     Extern(Prim),
     Closure(Closure),
@@ -149,7 +149,7 @@ pub enum Type {
 }
 
 /// An expression is a value that can be evaluated to produce another expression.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Int(i64),
     Id(String),
@@ -357,8 +357,16 @@ impl Value {
         matches!(self.kind, Expr::Int(_))
     }
 
-    pub fn is_atom(&self) -> bool {
+    pub fn is_id(&self) -> bool {
         matches!(self.kind, Expr::Id(_))
+    }
+
+    pub fn is_atom(&self) -> bool {
+        matches!(self.kind, Expr::Atom(_))
+    }
+
+    pub fn is_str(&self) -> bool {
+        matches!(self.kind, Expr::Str(_))
     }
 
     pub fn to_list(&self) -> Option<(Vec<Value>, Option<Value>)> {
@@ -383,59 +391,119 @@ impl Value {
     }
 }
 
+pub enum SExpr {
+    Label(String),
+    List(Vec<SExpr>),
+}
+
+impl SExpr {
+    fn text_width(&self) -> usize {
+        match self {
+            SExpr::Label(label) => label.len(),
+            SExpr::List(list) => {
+                let mut width = 2;
+
+                for item in list {
+                    width += item.text_width();
+                }
+
+                width
+            }
+        }
+    }
+
+    fn pretty_print(&self, f: &mut Formatter<'_>, indent: usize, first: bool) -> fmt::Result {
+        let width = self.text_width();
+
+        if !first {
+            write!(f, "{}", " ".repeat(indent))?;
+        }
+
+        match self {
+            SExpr::Label(label) => write!(f, "{}", label),
+            SExpr::List(list) if width + indent > 80 => {
+                write!(f, "(")?;
+
+                for (i, item) in list.iter().enumerate() {
+                    item.pretty_print(f, indent + 2, i == 0)?;
+
+                    if i != list.len() - 1 {
+                        write!(f, "\n")?;
+                    }
+                }
+
+                write!(f, ")")
+            }
+            Self::List(list) => {
+                write!(f, "(")?;
+
+                for (i, item) in list.iter().enumerate() {
+                    if i != 0 {
+                        write!(f, " ")?;
+                    }
+                    item.pretty_print(f, 0, true)?;
+                }
+
+                write!(f, ")")
+            }
+        }
+    }
+}
+
+impl Display for SExpr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.pretty_print(f, 0, false)
+    }
+}
+
+impl From<Value> for SExpr {
+    fn from(value: Value) -> Self {
+        match &value.kind {
+            Expr::Cons(_, _) => {
+                let (list, not_nil) = value.to_list().unwrap();
+
+                let mut list = list.into_iter().map(|x| x.into()).collect::<Vec<_>>();
+
+                if let Some(not_nil) = not_nil {
+                    list.push(SExpr::Label(".".to_string()));
+                    list.push(not_nil.into());
+                }
+
+                SExpr::List(list)
+            }
+            Expr::Vector(vector) => {
+                let mut vec: Vec<_> = vector.iter().map(|x| x.clone().into()).collect();
+                vec.insert(0, SExpr::Label("vec".to_string()));
+                SExpr::List(vec)
+            }
+            Expr::HashMap(values) => {
+                let mut list = Vec::new();
+
+                for (key, value) in values.values() {
+                    list.push(SExpr::List(vec![key.clone().into(), value.clone().into()]));
+                }
+
+                list.insert(0, SExpr::Label("hash-map".to_string()));
+
+                SExpr::List(list)
+            }
+
+            Expr::Id(id) => SExpr::Label(id.to_string()),
+            Expr::Nil => SExpr::List(Vec::new()),
+            Expr::Int(int) => SExpr::Label(int.to_string()),
+            Expr::Str(string) => SExpr::Label(format!("\"{}\"", string)),
+            Expr::Function(..) => SExpr::Label("<function>".to_string()),
+            Expr::Err(string, _) => SExpr::Label(string.to_string()),
+            Expr::Atom(atom) => SExpr::Label(format!(":{}", atom)),
+            Expr::External(..) => SExpr::Label("<external>".to_string()),
+            Expr::Library(_) => todo!(),
+        }
+    }
+}
+
 impl Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.kind {
-            Expr::Int(int) => write!(f, "{}", int),
-            Expr::Id(ref id) => write!(f, "{}", id),
-            Expr::Atom(ref id) => write!(f, ":{}", id),
-            Expr::Str(ref string) => write!(f, "\"{}\"", string.escape_default()),
-            Expr::Cons(..) => {
-                let (mut list, not_nil) = self.to_list().unwrap();
-                let is_list_literal = if !list.is_empty() {
-                    let head = list.first().unwrap().clone();
-                    if matches!(&head.kind, Expr::Id(id) if id == "list") {
-                        list.remove(0);
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
-
-                write!(f, "{}", if is_list_literal { "[" } else { "(" })?;
-                if !list.is_empty() {
-                    write!(f, "{}", list[0])?;
-                    for item in &list[1..] {
-                        write!(f, " {}", item)?;
-                    }
-                }
-                if let Some(not_nil) = not_nil {
-                    write!(f, " . {}", not_nil)?;
-                }
-                write!(f, "{}", if is_list_literal { "]" } else { ")" })
-            }
-            Expr::Vector(ref vec, ..) => {
-                write!(f, "(vec")?;
-                for item in vec {
-                    write!(f, " {}", item)?;
-                }
-                write!(f, ")")
-            }
-            Expr::Nil => write!(f, "()"),
-            Expr::Function(..) => write!(f, "<function>"),
-            Expr::Err(ref runtime_error, ..) => write!(f, "<runtime error: {}>", runtime_error),
-            Expr::HashMap(ref map, ..) => {
-                write!(f, "(hash-map")?;
-                for value in map.values() {
-                    write!(f, " ({} {})", value.0, value.1)?;
-                }
-                write!(f, ")")
-            }
-            Expr::Library(_) => write!(f, "<library>"),
-            Expr::External(_, _) => write!(f, "<external>"),
-        }
+        SExpr::from(self.clone()).fmt(f)
     }
 }
 

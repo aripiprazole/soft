@@ -64,6 +64,23 @@ pub fn hash_map_set(scope: CallScope<'_>) -> Result<Trampoline> {
     }
 }
 
+pub fn hash_map_remove(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(2)?;
+
+    let map = scope.at(0).run(scope.env)?;
+    let key = scope.at(1).run(scope.env)?;
+
+    let borrow = map.borrow_mut();
+
+    match borrow.kind {
+        Expr::HashMap(ref mut map) => {
+            map.remove(&key.stringify());
+            Ok(Trampoline::returning(Expr::Nil))
+        }
+        _ => Err(RuntimeError::from("expected hash-map")),
+    }
+}
+
 pub fn hash_map_keys(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
 

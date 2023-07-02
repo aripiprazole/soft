@@ -74,21 +74,31 @@ pub fn import(scope: CallScope<'_>) -> Result<Trampoline> {
         .location
         .file
         .clone()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap());
+        .map(|str| {
+            if str == "<repl>" {
+                std::env::current_dir().unwrap()
+            } else {
+                let mut cwd = PathBuf::from(str);
+                cwd.pop();
+                cwd
+            }
+        })
+        .unwrap();
 
     let path = scope.at(0).assert_string()?;
-    cwd.pop();
 
     cwd.push(path);
 
-    let cwd = cwd.canonicalize().unwrap();
+    let Ok(cwd) = cwd.canonicalize() else {
+        let msg = format!("cannot find file '{}'", cwd.display());
+        return Err(RuntimeError::UserError(Value::from(Expr::Str(msg))))
+    };
 
-    if scope.env.imported_files.contains(&cwd) {
-        return Ok(Trampoline::returning(Expr::Nil));
-    } else {
-        scope.env.imported_files.insert(cwd.clone());
-    }
+    // if scope.env.imported_files.contains(&cwd) {
+    //     return Ok(Trampoline::returning(Expr::Nil));
+    // } else {
+    //     scope.env.imported_files.insert(cwd.clone());
+    // }
 
     let cwd = pathdiff::diff_paths(cwd, std::env::current_dir().unwrap()).unwrap();
 
@@ -104,4 +114,16 @@ pub fn import(scope: CallScope<'_>) -> Result<Trampoline> {
         .try_fold(Expr::Nil.into(), |_, next| next.run(scope.env))?;
 
     Ok(Trampoline::returning(Expr::Nil))
+}
+
+pub fn while_(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(2)?;
+
+    let mut result = Expr::Nil.into();
+
+    while scope.at(0).run(scope.env)?.to_bool() {
+        result = scope.at(1).run(scope.env)?;
+    }
+
+    Ok(Trampoline::returning(result))
 }

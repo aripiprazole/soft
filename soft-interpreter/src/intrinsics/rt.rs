@@ -111,7 +111,9 @@ pub fn apply(scope: CallScope<'_>) -> Result<Trampoline> {
 
     args.insert(0, function);
 
-    Ok(Trampoline::Eval(Value::from_iter(args.into_iter(), None)))
+    let result = Value::from_iter(args.into_iter(), None);
+
+    Ok(Trampoline::Eval(result))
 }
 
 /// nil? : a -> bool
@@ -163,7 +165,7 @@ pub fn is_int(scope: CallScope<'_>) -> Result<Trampoline> {
 pub fn is_atom(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
 
-    let value = scope.at(0).run(scope.env)?.is_atom();
+    let value = scope.at(0).run(scope.env)?.is_id();
 
     let value = if value {
         Expr::Id("true".to_string())
@@ -228,17 +230,45 @@ pub fn type_of(scope: CallScope<'_>) -> Result<Trampoline> {
 pub fn to_string(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
 
-    let value = scope.at(0).run(scope.env)?.stringify();
+    let value = scope.at(0).run(scope.env)?;
+    let value = match &value.kind {
+        Expr::Id(s) => s.to_string(),
+        Expr::Str(s) => s.to_string(),
+        Expr::Atom(s) => s.to_string(),
+        _ => value.stringify(),
+    };
 
     Ok(Trampoline::returning(Expr::Str(value)))
+}
+
+pub fn to_id(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = match &scope.at(0).run(scope.env)?.kind {
+        Expr::Id(s) | Expr::Str(s) | Expr::Atom(s) => s.to_owned(),
+        _ => "<object>".to_owned(),
+    };
+
+    Ok(Trampoline::returning(Expr::Id(value)))
 }
 
 pub fn to_atom(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(1)?;
 
-    let value = scope.at(0).run(scope.env)?.stringify();
+    let value = match &scope.at(0).run(scope.env)?.kind {
+        Expr::Id(s) | Expr::Str(s) | Expr::Atom(s) => s.to_owned(),
+        _ => "<object>".to_owned(),
+    };
 
-    Ok(Trampoline::returning(Expr::Id(value)))
+    Ok(Trampoline::returning(Expr::Atom(value)))
+}
+
+pub fn clone(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(1)?;
+
+    let value = scope.at(0).run(scope.env)?.kind.clone();
+
+    Ok(Trampoline::returning(value))
 }
 
 pub fn to_int(scope: CallScope<'_>) -> Result<Trampoline> {

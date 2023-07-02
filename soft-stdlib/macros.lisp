@@ -25,11 +25,11 @@
         (let body (cons 'block body))
         (quasi-quote (letrec `name (fn* `name `args `body)))))
 
-(defmacro when (cond &rest body)
-    (quasi-quote (if `cond `(cons 'block body) ())))
+(defmacro when (condition &rest body)
+    (quasi-quote (if `condition `(cons 'block body) ())))
 
-(defmacro unless (cond &rest body)
-    (quasi-quote (if `cond () `(cons 'block body))))
+(defmacro unless (condition &rest body)
+    (quasi-quote (if `condition () `(cons 'block body))))
 
 (defun println (&rest body)
     (map* print body)

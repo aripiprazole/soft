@@ -102,7 +102,10 @@ impl Closure {
                                 }
                             }
                             _ => {
-                                return Err(RuntimeError::NotCallable(ret_head));
+                                return Err(RuntimeError::from(format!(
+                                    "not callable: {}",
+                                    ret_head
+                                )))
                             }
                         };
                     }
@@ -165,7 +168,7 @@ impl Value {
                         Ok(res) => Ok(res),
                         Err(err) => Err(err),
                     },
-                    _ => Err(RuntimeError::NotCallable(head)),
+                    _ => Err(RuntimeError::from(format!("not callable: {}", head))),
                 }
             }
             _ => Ok(Trampoline::Return(self)),

@@ -5,12 +5,6 @@ use crate::value::{Expr, Location, Value};
 
 #[derive(Error, Debug, Clone)]
 pub enum RuntimeError {
-    #[error("undefined name '{0}'")]
-    UndefinedName(String),
-
-    #[error("cannot call as function '{0}'")]
-    NotCallable(Value),
-
     #[error("unmatched parenthesis")]
     UnmatchedParenthesis(Location),
 

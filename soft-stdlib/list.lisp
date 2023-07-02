@@ -58,3 +58,16 @@
   (if (or (nil? a) (nil? b)) 
     ()
     (cons (pair (head a) (head b)) (list/zip (tail a) (tail b)))))
+
+(defun list/each (f expr)
+    (if (cons? expr)
+        (block (f (head expr)) (list/each f (tail expr)))
+        expr))
+
+(defun list/intersperse (sep list)
+    (if (cons? (tail list))
+        (cons (head list) (cons sep (list/intersperse sep (tail list))))
+        list))
+
+(defun string/join (list)
+    (apply string/concat list))

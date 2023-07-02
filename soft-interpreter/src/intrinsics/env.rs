@@ -14,6 +14,18 @@ pub fn letm(scope: CallScope<'_>) -> Result<Trampoline> {
 }
 
 /// set : id -> a -> nil
+pub fn setm(scope: CallScope<'_>) -> Result<Trampoline> {
+    scope.assert_arity(2)?;
+
+    let name = scope.at(0).assert_identifier()?;
+    let value = scope.at(1).run(scope.env)?;
+
+    scope.env.set(&name, value)?;
+
+    Ok(Trampoline::returning(Expr::Nil))
+}
+
+/// set : id -> a -> nil
 pub fn letrec(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(2)?;
 
@@ -44,7 +56,7 @@ pub fn set(scope: CallScope<'_>) -> Result<Trampoline> {
 }
 
 /// setm : id -> a -> nil
-pub fn setm(scope: CallScope<'_>) -> Result<Trampoline> {
+pub fn set_macro(scope: CallScope<'_>) -> Result<Trampoline> {
     scope.assert_arity(2)?;
 
     let name = scope.at(0).assert_identifier()?;

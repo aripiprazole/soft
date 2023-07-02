@@ -2,7 +2,7 @@
 
 use crate::{
     environment::Environment,
-    error::RuntimeError::{ExpectedList, NotCallable},
+    error::RuntimeError::{self, ExpectedList},
     value::{
         Expr::{Cons, Function, Id},
         Value,
@@ -41,7 +41,12 @@ impl Value {
                                     return Err(err);
                                 }
                             },
-                            _ => return Err(NotCallable(head.value.clone())),
+                            _ => {
+                                return Err(RuntimeError::from(format!(
+                                    "not callable: {}",
+                                    head.value.clone()
+                                )))
+                            }
                         }
                     }
                     _ => return Ok(expr),

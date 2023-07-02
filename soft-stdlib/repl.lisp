@@ -1,6 +1,10 @@
 (import "stdlib.lisp")
 
-(unless ()
-    (print "hello")
-    (print "world")
-    (print "\n"))
+(defun repl ()
+    (print "> ")
+    (flush)
+    (let line (read))
+    (println (try* (map* eval (parse line "REPL")) (err err)))
+    (repl))
+
+(repl)

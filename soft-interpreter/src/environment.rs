@@ -40,6 +40,16 @@ impl Frame {
             .cloned()
     }
 
+    pub fn set(&mut self, id: &str, value: Value) -> Option<Value> {
+        for stack in self.stack.iter_mut().rev() {
+            if let Some(old) = stack.remove(id) {
+                stack.insert(id.to_string(), value);
+                return Some(old);
+            }
+        }
+        None
+    }
+
     /// Inserts a variable in the current frame.
     pub fn insert(&mut self, id: String, value: Value) {
         self.stack.back_mut().unwrap().insert(id, value);
@@ -48,6 +58,11 @@ impl Frame {
     /// Pushes a new scope in the current frame.
     pub fn push(&mut self) {
         self.stack.push_back(im_rc::HashMap::new());
+    }
+
+    /// Pushes a new scope in the current frame.
+    pub fn child(&mut self, hashmap: im_rc::HashMap<String, Value>) {
+        self.stack.push_back(hashmap);
     }
 
     /// Pops the current scope from the current frame.
@@ -93,7 +108,7 @@ impl Environment {
         };
 
         Self {
-            frames: vec![Frame::new(None, false, start.clone())],
+            frames: vec![Frame::new(None, true, start.clone())],
             expanded: false,
             global: Expr::HashMap(Default::default()).into(),
             location: start,
@@ -116,6 +131,7 @@ impl Environment {
         self.register_external("tail", intrinsics::tail);
         self.register_external("cons", intrinsics::cons);
         self.register_external("list", intrinsics::list);
+        self.register_external("match", intrinsics::match_);
 
         self.register_external("read", intrinsics::read);
         self.register_external("flush", intrinsics::flush);
@@ -123,6 +139,7 @@ impl Environment {
         self.register_external("read-file", intrinsics::read_file);
         self.register_external("parse", intrinsics::parse);
         self.register_external("import", intrinsics::import);
+        self.register_external("while", intrinsics::while_);
 
         self.register_external("and", intrinsics::and);
         self.register_external("or", intrinsics::or);
@@ -130,9 +147,10 @@ impl Environment {
         self.register_external("fn*", intrinsics::fn_);
         self.register_external("if", intrinsics::if_);
         self.register_external("let", intrinsics::letm);
+        self.register_external("set", intrinsics::setm);
         self.register_external("letrec", intrinsics::letrec);
         self.register_external("set*", intrinsics::set);
-        self.register_external("setm*", intrinsics::setm);
+        self.register_external("setm*", intrinsics::set_macro);
         self.register_external("quote", intrinsics::quote);
         self.register_external("expand", intrinsics::expand);
         self.register_external("block", intrinsics::block);
@@ -169,11 +187,12 @@ impl Environment {
         self.register_external("vec", intrinsics::vec);
 
         self.register_external("hash-map", intrinsics::hash_map);
-        self.register_external("hash-map/get", intrinsics::hash_map_get);
-        self.register_external("hash-map/set!", intrinsics::hash_map_set);
-        self.register_external("hash-map/keys", intrinsics::hash_map_keys);
-        self.register_external("hash-map/vals", intrinsics::hash_map_vals);
-        self.register_external("hash-map/len", intrinsics::hash_map_len);
+        self.register_external("map/get", intrinsics::hash_map_get);
+        self.register_external("map/set!", intrinsics::hash_map_set);
+        self.register_external("map/remove!", intrinsics::hash_map_remove);
+        self.register_external("map/keys", intrinsics::hash_map_keys);
+        self.register_external("map/vals", intrinsics::hash_map_vals);
+        self.register_external("map/len", intrinsics::hash_map_len);
 
         self.register_external("string/len", intrinsics::string_length);
         self.register_external("string/slice", intrinsics::string_slice);
@@ -187,7 +206,9 @@ impl Environment {
 
         self.register_external("to-string", intrinsics::to_string);
         self.register_external("to-int", intrinsics::to_int);
+        self.register_external("to-id", intrinsics::to_id);
         self.register_external("to-atom", intrinsics::to_atom);
+        self.register_external("clone", intrinsics::clone);
 
         self.register_external("try*", intrinsics::try_);
         self.register_external("throw", intrinsics::throw);
@@ -202,8 +223,16 @@ impl Environment {
             .last()
             .unwrap()
             .find(id)
-            .ok_or_else(|| RuntimeError::UndefinedName(id.to_owned()))
+            .ok_or_else(|| RuntimeError::from(format!("undefined name: {}", id)))
             .or_else(|_| self.get_def(id).map(|x| x.value))
+    }
+
+    pub fn set(&mut self, id: &str, value: Value) -> Result<Value, RuntimeError> {
+        self.frames
+            .last_mut()
+            .unwrap()
+            .set(id, value)
+            .ok_or_else(|| RuntimeError::from(format!("undefined name: {}", id)))
     }
 
     pub fn get_def(&self, id: &str) -> Result<Def, RuntimeError> {
@@ -216,7 +245,7 @@ impl Environment {
         let value = map
             .get(id)
             .map(|x| x.1.clone())
-            .ok_or_else(|| RuntimeError::UndefinedName(id.to_owned()))?
+            .ok_or_else(|| RuntimeError::from(format!("undefined name: {}", id)))?
             .assert_vector()?;
 
         if value.len() >= 3 {
