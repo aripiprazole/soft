@@ -6,3 +6,9 @@ documentation.workspace = true
 version.workspace = true
 
 [dependencies]
+bupropion = "0.0.18"
+clap = {versin = "4.4.7", features = ["derive"]}
+libc = "0.2.149"
+miette = "5.10.0"
+rustyline = "12.0.0"
+thiserror = "1.0.50"

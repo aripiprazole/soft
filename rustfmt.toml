@@ -1,0 +1,4 @@
+format_code_in_doc_comments = true
+overflow_delimited_expr = true
+reorder_impl_items = true
+group_imports = "StdExternalCrate"
