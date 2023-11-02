@@ -1,7 +1,11 @@
+[workspace.package]
+edition = "2021"
+authors = ["Gabrielle Guimarães de Oliveira", "Sofia da Silva Rodrigues"]
+description = "The simpliest lisp compiler"
+documentation = "https://github.com/aripiprazole/soft"
+version = "0.3.0"
+
 [workspace]
-members = [
-  "soft-interpreter",
-  "soft-tests",
-]
+members = ["softc"]
 
 resolver = "1"

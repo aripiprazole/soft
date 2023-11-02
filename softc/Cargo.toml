@@ -1,0 +1,8 @@
+[package]
+name = "softc"
+edition.workspace = true
+authors.workspace = true
+documentation.workspace = true
+version.workspace = true
+
+[dependencies]
