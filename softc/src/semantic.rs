@@ -86,12 +86,18 @@ pub mod define {
     impl Define {
         /// Returns the name of the definition.
         pub fn name(&self) -> Result<Expression> {
-            self.0.at(1).ok_or(SemanticError::InvalidExpression)?.try_into()
+            self.0
+                .at(1)
+                .ok_or(SemanticError::InvalidExpression)?
+                .try_into()
         }
 
         /// Returns the value of the definition.
         pub fn value(&self) -> Result<Expression> {
-            self.0.at(2).ok_or(SemanticError::InvalidExpression)?.try_into()
+            self.0
+                .at(2)
+                .ok_or(SemanticError::InvalidExpression)?
+                .try_into()
         }
     }
 }
@@ -103,12 +109,18 @@ pub mod macro_define {
     impl MacroDefine {
         /// Returns the name of the definition.
         pub fn name(&self) -> Result<Expression> {
-            self.0.at(1).ok_or(SemanticError::InvalidExpression)?.try_into()
+            self.0
+                .at(1)
+                .ok_or(SemanticError::InvalidExpression)?
+                .try_into()
         }
 
         /// Returns the value of the definition.
         pub fn value(&self) -> Result<Expression> {
-            self.0.at(2).ok_or(SemanticError::InvalidExpression)?.try_into()
+            self.0
+                .at(2)
+                .ok_or(SemanticError::InvalidExpression)?
+                .try_into()
         }
     }
 }
@@ -120,7 +132,10 @@ pub mod quote {
     impl Quote {
         /// Returns the quoted expression.
         pub fn expression(&self) -> Result<Expression> {
-            self.0.at(1).ok_or(SemanticError::InvalidExpression)?.try_into()
+            self.0
+                .at(1)
+                .ok_or(SemanticError::InvalidExpression)?
+                .try_into()
         }
     }
 }
@@ -188,7 +203,16 @@ impl TryFrom<Term> for Expression {
     type Error = SemanticError;
 
     fn try_from(value: Term) -> Result<Self, Self::Error> {
-        try_new!(value, [Fun, Appl, List, Quote, Literal]).ok_or(SemanticError::InvalidExpression)
+        try_new!(value, [
+            Define,
+            MacroDefine,
+            Fun,
+            Appl,
+            List,
+            Quote,
+            Literal
+        ])
+        .ok_or(SemanticError::InvalidExpression)
     }
 }
 
@@ -213,8 +237,12 @@ macro_rules! try_new {
 macro_rules! define_builtin {
     ($name:ident, $keyword:expr, $length:expr) => {
         impl $crate::semantic::ExpressionKind for $name {
-            fn try_new(term: $crate::Term) -> $crate::semantic::Result<Option<$crate::semantic::Expression>> {
-                let (head, tail) = term.split().ok_or($crate::semantic::SemanticError::InvalidExpression)?;
+            fn try_new(
+                term: $crate::Term,
+            ) -> $crate::semantic::Result<Option<$crate::semantic::Expression>> {
+                let (head, tail) = term
+                    .split()
+                    .ok_or($crate::semantic::SemanticError::InvalidExpression)?;
                 if head.is_keyword($keyword) {
                     let tail = $crate::semantic::assert_length(tail, $length)?;
                     Ok(Some($name(term.transport(tail.into())).into()))
@@ -226,7 +254,9 @@ macro_rules! define_builtin {
     };
     ($name:ident, $keyword:expr) => {
         impl $crate::semantic::ExpressionKind for $name {
-            fn try_new(term: $crate::Term) -> $crate::semantic::Result<Option<$crate::semantic::Expression>> {
+            fn try_new(
+                term: $crate::Term,
+            ) -> $crate::semantic::Result<Option<$crate::semantic::Expression>> {
                 let Some((head, tail)) = term.split() else {
                     return Ok(None);
                 };
@@ -273,6 +303,6 @@ macro_rules! define_ast {
     };
 }
 
-use define_builtin;
 use define_ast;
+use define_builtin;
 use try_new;

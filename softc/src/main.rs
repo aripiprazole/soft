@@ -1,5 +1,6 @@
 //
 use clap::Parser;
+use miette::IntoDiagnostic;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -11,11 +12,18 @@ struct Args {
 
     /// Starts a repl session.
     #[arg(short, long)]
-    repl: bool
+    repl: bool,
 }
 
-fn main() {
+fn main() -> miette::Result<()> {
+    bupropion::install(|| {
+        // Build the bupropion handler options, for specific
+        // error presenting.
+        bupropion::BupropionHandlerOpts::new()
+    })
+    .into_diagnostic()?;
+
     let args = Args::parse();
 
-    
+    Ok(())
 }

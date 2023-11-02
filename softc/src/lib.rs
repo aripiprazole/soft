@@ -23,38 +23,48 @@ impl From<Vec<Term>> for Term {
 
 impl Term {
     pub fn transport(self, with: Term) -> Term {
-        match self {
-            Term::SrcPos(src_pos, term) => Term::SrcPos(src_pos, with.into()),
-            _ => with,
+        if let Term::SrcPos(src_pos, _) = self {
+            Term::SrcPos(src_pos, with.into())
+        } else {
+            with
         }
     }
 
     pub fn at(&self, nth: usize) -> Option<Term> {
-        todo!()
+        if let Term::List(ls) = self {
+            ls.get(nth).cloned()
+        } else {
+            None
+        }
     }
 
     pub fn split(&self) -> Option<(Term, Vec<Term>)> {
-        todo!()
+        if let Term::List(ls) = self {
+            let (first, rest) = ls.split_first()?;
+            Some((first.clone(), rest.to_vec()))
+        } else {
+            None
+        }
     }
 
     pub fn is_keyword(&self, keyword: &str) -> bool {
-        todo!()
+        matches!(self, Term::Identifier(x) if x == keyword)
     }
 
     pub fn spine(&self) -> Option<Vec<Term>> {
-        todo!()
+        if let Term::List(ls) = self.clone() {
+            Some(ls.clone())
+        } else {
+            None
+        }
     }
 
     /// Removes meta information from a term.
     pub fn unbox(self) -> Term {
         match self {
-            Term::List(_) => todo!(),
-            Term::Atom(_) => todo!(),
-            Term::Identifier(_) => todo!(),
-            Term::Int(_) => todo!(),
-            Term::Float(_, _) => todo!(),
-            Term::SrcPos(_, _) => todo!(),
-            Term::String(_) => todo!(),
+            Term::SrcPos(_, t) => t.unbox(),
+            Term::List(x) => Term::List(x.into_iter().map(|t| t.unbox()).collect()),
+            t => t,
         }
     }
 }
@@ -80,6 +90,8 @@ impl SrcPos {
 pub mod semantic;
 pub mod runtime;
 pub mod allocator;
+pub mod codegen;
+pub mod pprint;
 
 pub fn is_identifier_char(c: char) -> bool {
     c != ' ' && c != '\n' && c != '\t' && c != '(' && c != ')' && c != '"' && c != ';'
@@ -206,6 +218,8 @@ mod tests {
             parse_sexpr(r#""hello world""#).unwrap().unbox(),
             Term::String("hello world".to_string())
         );
+
+        println!("{}", parse_sexpr(r#"((((((((((((("hello world" 2 3 ) 4 5 ) 9 1)) 23 3 42)))))))))"#).unwrap().unbox());
     }
 
     #[test]
