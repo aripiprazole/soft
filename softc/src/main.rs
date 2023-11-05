@@ -1,4 +1,7 @@
-//
+
+
+pub mod repl;
+
 use clap::Parser;
 use miette::IntoDiagnostic;
 
@@ -16,14 +19,16 @@ struct Args {
 }
 
 fn main() -> miette::Result<()> {
-    bupropion::install(|| {
-        // Build the bupropion handler options, for specific
-        // error presenting.
-        bupropion::BupropionHandlerOpts::new()
-    })
-    .into_diagnostic()?;
 
+    // Install the panic handler.
+    bupropion::install(bupropion::BupropionHandlerOpts::new).into_diagnostic()?;
+
+    // Parse the command line arguments.
     let args = Args::parse();
+
+    if args.repl {
+        repl::repl();
+    }
 
     Ok(())
 }

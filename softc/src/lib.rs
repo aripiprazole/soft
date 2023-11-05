@@ -1,4 +1,11 @@
-use std::{iter::Peekable, str::Chars};
+use std::fmt::Display;
+
+/// Semantic expression abstract syntax.
+pub mod semantic;
+pub mod runtime;
+pub mod allocator;
+pub mod codegen;
+pub mod parser;
 
 /// Term is a recursive data structure that represents a list of terms, an atom, an identifier,
 /// or an integer.
@@ -15,6 +22,12 @@ pub enum Term {
     SrcPos(SrcPos, Box<Term>),
 }
 
+impl Display for Term {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.pretty_print(f, 0)
+    }
+}
+
 impl From<Vec<Term>> for Term {
     fn from(terms: Vec<Term>) -> Self {
         Term::List(terms)
@@ -22,6 +35,48 @@ impl From<Vec<Term>> for Term {
 }
 
 impl Term {
+    fn width(&self) -> usize {
+        match self {
+            Term::List(s) => {
+                let mut width = 2;
+                for t in s {
+                    width += t.width();
+                }
+                width
+            },
+            Term::Atom(s) => s.len(),
+            Term::Identifier(s) => s.len(),
+            Term::Int(n) => n.to_string().len(),
+            Term::Float(n, u) => n.to_string().len() + u.to_string().len() + 1,
+            Term::String(s) => s.len(),
+            Term::SrcPos(_, t) => t.width(),
+        }
+    }
+
+    fn pretty_print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize)-> std::fmt::Result  {
+        match self {
+            Term::List(s) => {
+                if self.width() + indent > 80 {
+                    write!(f, "{:indent$}(", "", indent = indent)?;
+                    for t in s {
+                        write!(f, "{:indent$}", "", indent = indent + 2)?;
+                        t.pretty_print(f, indent + 2)?;
+                        writeln!(f)?;
+                    }
+                    write!(f, "{:indent$})", "", indent = indent)?;
+                }
+
+                Ok(())
+            },
+            Term::Atom(s) => write!(f, ":{}", s),
+            Term::Identifier(s) => write!(f, "{}", s),
+            Term::Int(s) => write!(f, "{}", s),
+            Term::Float(u, n) => write!(f, "{}.{}", u, n),
+            Term::String(s) => write!(f, "\"{}\"", s),
+            Term::SrcPos(_, t) => t.pretty_print(f, indent),
+        }
+    }
+
     pub fn transport(self, with: Term) -> Term {
         if let Term::SrcPos(src_pos, _) = self {
             Term::SrcPos(src_pos, with.into())
@@ -83,147 +138,5 @@ impl SrcPos {
 
     pub fn reset(&mut self) {
         self.byte.start = self.byte.end;
-    }
-}
-
-/// Semantic expression abstract syntax.
-pub mod semantic;
-pub mod runtime;
-pub mod allocator;
-pub mod codegen;
-pub mod pprint;
-
-pub fn is_identifier_char(c: char) -> bool {
-    c != ' ' && c != '\n' && c != '\t' && c != '(' && c != ')' && c != '"' && c != ';'
-}
-
-pub struct Parser<'a> {
-    pub peekable: Peekable<Chars<'a>>,
-    pub string: &'a str,
-    pub index: usize,
-}
-
-impl<'a> Parser<'a> {
-    pub fn bump(&mut self) -> Option<char> {
-        let c = self.peekable.next()?;
-        self.index += c.len_utf8();
-        Some(c)
-    }
-
-    pub fn peek(&mut self) -> Option<char> {
-        self.peekable.peek().copied()
-    }
-
-    pub fn accumulate(&mut self, mut f: impl FnMut(char) -> bool) -> String {
-        let mut string = String::new();
-
-        loop {
-            match self.peek() {
-                Some(c) if f(c) => string.push(self.bump().unwrap()),
-                _ => break,
-            }
-        }
-
-        string
-    }
-
-    pub fn parse(&mut self) -> Result<Term, String> {
-        let start = self.index;
-
-        let result = match self.peek() {
-            Some(c) if c.is_whitespace() => {
-                self.accumulate(|c| c.is_whitespace());
-                self.parse()
-            }
-            Some(';') => {
-                self.accumulate(|c| c != '\n');
-                self.parse()
-            }
-            Some('"') => {
-                self.bump();
-                let string = self.accumulate(|c| c != '"');
-
-                if self.bump() != Some('"') {
-                    return Err("expected '\"'".to_string());
-                }
-
-                Ok(Term::String(string))
-            }
-            Some(':') => {
-                self.bump();
-                let string = self.accumulate(is_identifier_char);
-                Ok(Term::Atom(string))
-            }
-            Some(c) if c.is_ascii_digit() => {
-                let string = self.accumulate(|c| c.is_ascii_digit());
-                Ok(Term::Int(string.parse().unwrap()))
-            }
-            Some('(') => {
-                self.bump();
-                let mut terms = Vec::new();
-
-                loop {
-                    match self.peek() {
-                        Some(c) if c.is_whitespace() => {
-                            self.accumulate(|c| c.is_whitespace());
-                        }
-                        Some(')') => {
-                            self.bump();
-                            break;
-                        }
-                        Some(_) => {
-                            terms.push(self.parse()?);
-                        }
-                        None => return Err("unexpected end of file".to_string()),
-                    }
-                }
-
-                Ok(Term::List(terms))
-            }
-            Some(_) => {
-                let string = self.accumulate(is_identifier_char);
-                Ok(Term::Identifier(string))
-            }
-            None => Err("unexpected end of file".to_string()),
-        }?;
-
-        Ok(Term::SrcPos(
-            SrcPos {
-                byte: start..self.index,
-                file: self.string.to_string(),
-            },
-            Box::new(result),
-        ))
-    }
-}
-
-pub fn parse_sexpr(string: &str) -> Result<Term, String> {
-    let mut parser = Parser {
-        peekable: string.chars().peekable(),
-        string,
-        index: 0,
-    };
-
-    parser.parse()
-}
-
-/// Tests for parser of S-expressions.
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_string() {
-        assert_eq!(
-            parse_sexpr(r#""hello world""#).unwrap().unbox(),
-            Term::String("hello world".to_string())
-        );
-
-        println!("{}", parse_sexpr(r#"((((((((((((("hello world" 2 3 ) 4 5 ) 9 1)) 23 3 42)))))))))"#).unwrap().unbox());
-    }
-
-    #[test]
-    fn parses_sexpr() {
-        println!("{:?}", parse_sexpr(r#"(a b c)"#).unwrap());
     }
 }
