@@ -1,11 +1,11 @@
 use std::fmt::Display;
 
-/// Semantic expression abstract syntax.
 pub mod semantic;
 pub mod runtime;
 pub mod allocator;
 pub mod codegen;
 pub mod parser;
+pub mod ffi;
 
 /// Term is a recursive data structure that represents a list of terms, an atom, an identifier,
 /// or an integer.

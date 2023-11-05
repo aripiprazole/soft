@@ -256,7 +256,7 @@ pub struct Function {
 }
 
 #[derive(Debug)]
-pub struct Reference {
+pub struct Ref {
     pub ptr: *mut libc::c_void,
 }
 
@@ -310,7 +310,7 @@ impl sealed::Taggable for Function {
     const TAG: Tag = Tag::Function;
 }
 
-impl sealed::Taggable for Reference {
+impl sealed::Taggable for Ref {
     const TAG: Tag = Tag::Ref;
 }
 
@@ -330,7 +330,7 @@ impl sealed::Scoped for Symbol {}
 
 impl sealed::Scoped for Function {}
 
-impl sealed::Scoped for Reference {}
+impl sealed::Scoped for Ref {}
 
 impl sealed::Scoped for String {}
 
@@ -479,7 +479,7 @@ pub enum FatPtr {
     String(&'static str),
     Symbol(&'static Symbol),
     Function(&'static Function),
-    Ref(&'static Reference),
+    Ref(&'static Ref),
     Char(char),
     Boolean(bool),
     Nil,
@@ -495,7 +495,7 @@ impl From<TaggedPtr> for FatPtr {
                 Tag::String => FatPtr::String(TaggedPtr::from_any::<String>(value).pointer()),
                 Tag::Symbol => FatPtr::Symbol(TaggedPtr::from_any::<Symbol>(value).pointer()),
                 Tag::Function => FatPtr::Function(TaggedPtr::from_any::<Function>(value).pointer()),
-                Tag::Ref => FatPtr::Ref(TaggedPtr::from_any::<Reference>(value).pointer()),
+                Tag::Ref => FatPtr::Ref(TaggedPtr::from_any::<Ref>(value).pointer()),
                 Tag::Char => FatPtr::Char(char::from_u32_unchecked(
                     TaggedPtr::from_any::<U61>(value).number().0 as u32,
                 )),
@@ -510,7 +510,7 @@ impl From<TaggedPtr> for FatPtr {
 #[cfg(test)]
 mod tests {
     use super::{Bool, U61};
-    use super::{FatPtr, Function, Pair, Reference, Symbol, Tag, TaggedPtr, Vector};
+    use super::{FatPtr, Function, Pair, Ref, Symbol, Tag, TaggedPtr, Vector};
 
     type Test = (TaggedPtr, Tag, fn(FatPtr) -> bool);
 
@@ -542,7 +542,7 @@ mod tests {
             closure: vec![],
         }, crate::allocator::ALLOCATOR);
 
-        let reference = TaggedPtr::alloc(Reference {
+        let reference = TaggedPtr::alloc(Ref {
             ptr: (&function) as *const TaggedPtr as *mut libc::c_void,
         }, crate::allocator::ALLOCATOR);
 

@@ -7,7 +7,7 @@ use cranelift_module::{Module, FuncId, DataDescription};
 use miette::NamedSource;
 
 use crate::{SrcPos, semantic::SemanticError};
-
+use crate::semantic::Expression;
 
 #[derive(thiserror::Error, miette::Diagnostic, Debug)]
 #[diagnostic(url(docsrs))]
@@ -26,12 +26,6 @@ pub enum InnerError {
     #[error("semantic error: {0}")]
     #[diagnostic(code(soft::semantic))]
     SemanticError(SemanticError),
-}
-
-struct CompiledFunction {
-    defined: bool,
-    id: FuncId,
-    param_count: usize,
 }
 
 #[derive(Default)]
@@ -61,7 +55,6 @@ pub struct Generator {
     pub location: SrcPos,
     pub ctx: codegen::Context,
     pub module: JITModule,
-    functions: HashMap<String, CompiledFunction>,
     variable_builder: VariableBuilder,
 }
 
@@ -90,12 +83,34 @@ impl Default for Generator {
             data_description: DataDescription::new(),
             location: SrcPos::default(),
             module,
-            functions: Default::default(),
             variable_builder: Default::default(),
         }
     }
 }
 
 impl Generator {
-    
+    pub fn compile(&mut self) {
+        self.module.clear_context(&mut self.ctx);
+
+        self.module.finalize_definitions().unwrap();
+
+        let code = self.module.get_finalized_function(id);
+
+        let code = unsafe { std::mem::transmute::<_, fn() -> i64>(code) };
+
+        let result = code();
+
+        println!("{}", result);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test() {
+        let mut generator = Generator::default();
+        generator.compile();
+    }
 }
