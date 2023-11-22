@@ -4,15 +4,15 @@ define_ast!(Expression, {
     Fun,         // (fun (a b) (+ a b))
     List,        // (a b c) or (list a b c)
     Appl,        // (a b c) or (apply a b c)
-    Define,      // (define a 123)
-    MacroDefine, // (macro-define a (fun (a b) (+ a b))
+    Def,      // (define a 123)
+    DefMacro, // (macro-define a (fun (a b) (+ a b))
     Quote,       // '(fun (a b) (+ a b))
     Literal      // 123 | "bla" | :bla | bla
 });
 
-define_builtin!(MacroDefine, "macro-define", 2);
-define_builtin!(Define, "define", 2);
-define_builtin!(Fun, "fun", 2);
+define_builtin!(DefMacro, "defmacro*", 2);
+define_builtin!(Def, "def*", 2);
+define_builtin!(Fun, "fun*", 2);
 define_builtin!(Quote, "'", 2);
 define_builtin!(List, "list");
 define_builtin!(Appl, "apply");
@@ -83,7 +83,7 @@ pub mod appl {
 pub mod define {
     pub use super::*;
 
-    impl Define {
+    impl Def {
         /// Returns the name of the definition.
         pub fn name(&self) -> Result<Expression> {
             self.0
@@ -106,7 +106,7 @@ pub mod define {
 pub mod macro_define {
     pub use super::*;
 
-    impl MacroDefine {
+    impl DefMacro {
         /// Returns the name of the definition.
         pub fn name(&self) -> Result<Expression> {
             self.0
@@ -203,35 +203,19 @@ impl TryFrom<Term> for Expression {
     type Error = SemanticError;
 
     fn try_from(value: Term) -> Result<Self, Self::Error> {
-        try_new!(value, [
-            Define,
-            MacroDefine,
-            Fun,
-            Appl,
-            List,
-            Quote,
-            Literal
-        ])
-        .ok_or(SemanticError::InvalidExpression)
+        DefMacro::try_new(value.clone())
+            .or_else(|_| Def::try_new(value.clone()))
+            .or_else(|_| Fun::try_new(value.clone()))
+            .or_else(|_| Quote::try_new(value.clone()))
+            .or_else(|_| Appl::try_new(value.clone()))
+            .or_else(|_| List::try_new(value.clone()))
+            .or_else(|_| Literal::try_new(value.clone()))?
+            .ok_or(SemanticError::InvalidExpression)
     }
 }
 
 pub trait ExpressionKind: Sized {
     fn try_new(term: Term) -> Result<Option<Expression>>;
-}
-
-/// Pipes try new functions to each other, it's useful to create a try_from function for enums
-/// that have multiple variants.
-macro_rules! try_new {
-    ($target:expr, [$($value:ident),+]) => {{
-        use crate::semantic::ExpressionKind;
-        let mut value = None;
-        $(value = match value {
-            Some(value) => Some(value),
-            None => $value::try_new($target.clone())?,
-        };)+
-        value
-    }};
 }
 
 macro_rules! define_builtin {
@@ -305,4 +289,3 @@ macro_rules! define_ast {
 
 use define_ast;
 use define_builtin;
-use try_new;

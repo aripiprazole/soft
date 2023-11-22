@@ -1,11 +1,16 @@
-[workspace.package]
+[package]
+name = "soft"
 edition = "2021"
 authors = ["Gabrielle Guimarães de Oliveira", "Sofia da Silva Rodrigues"]
 description = "The simpliest lisp compiler"
 documentation = "https://github.com/aripiprazole/soft"
 version = "0.3.0"
 
-[workspace]
-members = ["softc"]
-
-resolver = "1"
+[dependencies]
+bupropion = "0.0.18"
+clap = {version = "4.4.7", features = ["derive"]}
+eyre = "0.6.8"
+libc = "0.2.149"
+miette = "5.10.0"
+rustyline = {version = "12.0.0", features = ["derive"]}
+thiserror = "1.0.50"
