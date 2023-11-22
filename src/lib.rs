@@ -1,9 +1,10 @@
+#![feature(box_patterns)]
+
 use std::fmt::Display;
 
 pub mod semantic;
-pub mod runtime;
-pub mod allocator;
 pub mod parser;
+pub mod eval;
 
 /// Term is a recursive data structure that represents a list of terms, an atom, an identifier,
 /// or an integer.
@@ -12,6 +13,7 @@ pub mod parser;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Term {
     List(Vec<Term>),    // (a b c)
+    Vec(Vec<Term>),     // [a b c]
     Atom(String),       // :bla
     Identifier(String), // bla
     Int(u64),           // 123
@@ -35,7 +37,7 @@ impl From<Vec<Term>> for Term {
 impl Term {
     fn width(&self) -> usize {
         match self {
-            Term::List(s) => {
+            Term::List(s) | Term::Vec(s) => {
                 let mut width = 2;
                 for t in s {
                     width += t.width();
@@ -53,7 +55,7 @@ impl Term {
 
     fn pretty_print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize)-> std::fmt::Result  {
         match self {
-            Term::List(s) => {
+            Term::List(s) | Term::Vec(s) => {
                 if self.width() + indent > 80 {
                     write!(f, "{:indent$}(", "", indent = indent)?;
                     for t in s {
