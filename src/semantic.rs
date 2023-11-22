@@ -10,7 +10,7 @@ define_ast!(Expr, {
     Atomic,   // (atomic* 123)
     Set,      // (set* a 123)
     DefMacro, // (defmacro* a (fun (a b) (+ a b))
-    Quote,    // '(fun (a b) (+ a b))
+    Quote,    // '(fun* (a b) (+ a b))
     Literal   // 123 | "bla" | :bla | bla
 });
 
@@ -239,6 +239,8 @@ pub mod quote {
 
 /// Literal expression construct, it's a literal value.
 pub mod literal {
+    use std::fmt::Display;
+
     use super::*;
 
     impl ExpressionKind for Literal {
@@ -247,7 +249,17 @@ pub mod literal {
         }
     }
 
+    impl From<String> for Expr {
+        fn from(value: String) -> Self {
+            Expr::Literal(Literal(Term::String(value)))
+        }
+    }
+
     impl Expr {
+        pub fn new_keyword(keyword: impl Display) -> Self {
+            Expr::Literal(Literal(Term::Atom(keyword.to_string())))
+        }
+
         /// Expects a string literal and returns it's value.
         pub fn string(&self) -> Result<String> {
             match self {
@@ -286,6 +298,24 @@ pub enum SemanticError {
 
     #[error("invalid quote expression")]
     ExpectedQuoteExpression,
+}
+
+impl From<SemanticError> for Expr {
+    fn from(value: SemanticError) -> Self {
+        match value {
+            SemanticError::InvalidExpression => Expr::new_keyword("error/invalid-expression"),
+            SemanticError::InvalidList => Expr::new_keyword("error/invalid-list"),
+            SemanticError::InvalidArguments => Expr::new_keyword("error/invalid-arguments"),
+            SemanticError::MissingParameters => Expr::new_keyword("error/missing-parameters"),
+            SemanticError::MissingBody => Expr::new_keyword("error/missing-body"),
+            SemanticError::MissingHead => Expr::new_keyword("error/missing-head"),
+            SemanticError::ExpectedString => Expr::new_keyword("error/expected-string"),
+            SemanticError::ExpectedVectorWithSize(_) => Expr::new_keyword("error/expected-vector"),
+            SemanticError::ExpectedQuoteExpression => {
+                Expr::new_keyword("error/expected-quote-expression")
+            }
+        }
+    }
 }
 
 fn assert_length(list: Vec<Term>, length: usize) -> Result<Vec<Term>, SemanticError> {

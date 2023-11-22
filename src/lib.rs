@@ -1,4 +1,5 @@
 #![feature(box_patterns)]
+#![feature(try_trait_v2)]
 
 use std::fmt::Display;
 
