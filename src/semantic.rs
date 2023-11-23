@@ -71,7 +71,7 @@ pub mod list {
 
     impl List {
         /// Returns a list of expressions that are in the spine of the list.
-        pub fn spine(&self) -> Result<Vec<Expr>> {
+        pub fn elements(&self) -> Result<Vec<Expr>> {
             self.0
                 .spine()
                 .ok_or(SemanticError::InvalidList)?
