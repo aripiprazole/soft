@@ -1,0 +1,4 @@
+(require '[stdlib.soft])
+
+(println (-> stdlib/args
+             (map (fun [x] (str "Hello " x)))))

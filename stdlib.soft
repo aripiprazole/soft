@@ -1,0 +1,15 @@
+(defmacro* map* (fun* [f coll]
+  (if (cons? coll)
+    (cons (f (car coll)) (map* f (cdr coll)))
+    coll)))
+
+(defmacro* quasi-quote (fun* [form]
+  (if (cons? form)
+    (if (= 'unquote (car form))
+      (cdr form)
+      (cons 'list (map* quasi-quote form)))
+    (list 'quote form))))
+
+(defmacro* defmacro [name args & body]
+  (let [body (cons 'block body)]
+    `(defmacro* ,name (fun* ,args ,body))))

@@ -47,9 +47,7 @@ pub enum Value {
     String(String),
     Float(u64),
     Fun(Fun),
-    List {
-        elements: Vec<Value>,
-    },
+    List(Vec<Value>),
     Apply {
         callee: Box<Value>,
         arguments: Vec<Value>,
@@ -208,13 +206,12 @@ impl Expr {
 
             // Base cases for expansion when it will just walk the tree. These
             // are the cases where the expansion is recursive.
-            Expr::List(list) => Ok(Value::List {
-                elements: list
-                    .elements()?
+            Expr::List(list) => Ok(Value::List(
+                list.elements()?
                     .into_iter()
                     .map(|expr| expr.expand(environment))
                     .collect::<Result<Vec<_>, _>>()?,
-            }),
+            )),
             Expr::Def(def) => Ok(Value::Def {
                 name: def.name()?.expand(environment)?.try_into()?,
                 value: def.value()?.expand(environment)?.into(),
@@ -261,10 +258,12 @@ impl Expr {
             Expr::Literal(_) => Err(keyword!("eval.error/invalid-literal")),
         }
     }
+}
 
+impl Value {
     /// Evaluate the expression into a value.
     pub fn eval(self, environment: &Environment) -> Trampoline<Value> {
-        match self.expand(environment)? {
+        match self {
             Value::Deref { box value, .. } => {
                 let Value::Atomic(atomic) = value else {
                     bail!(keyword!("eval.error/atomic-expected"))
@@ -273,7 +272,20 @@ impl Expr {
 
                 Done(guard.clone())
             }
+            Value::Apply { callee, arguments } => {
+                todo!()
+            }
+            Value::List(old_elements) => {
+                let mut new_elements = Vec::new();
+                for element in old_elements {
+                    new_elements.push(element.eval(environment)?);
+                }
 
+                Done(Value::List(new_elements))
+            }
+
+            // Base cases for evaluation when it will just walk the tree. These
+            // are the cases where the evaluation is recursive.
             value => Done(value),
         }
     }
