@@ -427,7 +427,7 @@ macro_rules! define_ast {
 
             $(#[$field_outer])*
             #[derive(Debug, Clone)]
-            pub struct $variant($crate::Term);
+            pub struct $variant(pub $crate::Term);
 
             impl From<$variant> for $crate::Term {
                 fn from(value: $variant) -> Self {

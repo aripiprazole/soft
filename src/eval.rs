@@ -1,5 +1,4 @@
 use std::{
-    collections::VecDeque,
     convert::Infallible,
     ops::{ControlFlow, FromResidual, Try},
     sync::{Arc, RwLock},
@@ -8,26 +7,59 @@ use std::{
 use Trampoline::{Continue, Done, Raise};
 
 use crate::{
-    semantic::{self, defmacro::keyword, Expr},
-    SrcPos,
+    semantic::{self, defmacro::keyword, Expr, Literal},
+    SrcPos, Term,
 };
+
+pub struct Definition {
+    pub is_macro_definition: bool,
+    pub name: String,
+    pub value: Value,
+}
 
 pub struct Frame {
     pub name: Option<String>,
     pub src_pos: SrcPos,
-    pub variables: im::HashMap<String, Expr>,
+    pub definitions: im::HashMap<String, Expr>,
     pub is_catching_scope: bool,
+}
+
+#[derive(Clone)]
+pub struct Keyword {
+    pub name: String,
 }
 
 #[derive(Clone)]
 pub enum Value {
     Fun(semantic::Fun),
     List(Arc<Vec<Value>>),
-    Literal(semantic::Literal),
-    Apply(semantic::Apply),
-    Def(semantic::Def),
-    DefMacro(semantic::DefMacro),
-    Quote(semantic::Quote),
+    Int(u64),
+    Keyword(Keyword),
+    String(String),
+    Float(u64),
+    Apply {
+        callee: Box<Value>,
+        arguments: Vec<Value>,
+    },
+    Def {
+        name: Keyword,
+        value: Box<Value>,
+    },
+    DefMacro {
+        name: Keyword,
+        value: Box<Value>,
+    },
+    Set {
+        target: Box<Value>,
+        value: Box<Value>,
+    },
+    Deref {
+        value: Box<Value>,
+    },
+    Recur {
+        arguments: Vec<Value>,
+    },
+    Quote(Expr),
     Atomic(Arc<RwLock<Value>>),
     Ptr(*mut ()),
     Nil,
@@ -36,7 +68,7 @@ pub enum Value {
 pub struct Environment {
     pub global: Value,
     pub expanded: bool,
-    pub frames: Arc<VecDeque<Frame>>,
+    pub frames: Arc<RwLock<im::Vector<Frame>>>,
 }
 
 pub enum Trampoline<T, E = Expr> {
@@ -45,28 +77,63 @@ pub enum Trampoline<T, E = Expr> {
     Continue(Box<dyn Fn() -> Trampoline<T>>),
 }
 
-pub fn eval(expr: Expr, environment: Environment) -> Trampoline<Value> {
-    match expr {
-        Expr::List(_) => todo!(),
-        Expr::Apply(_) => todo!(),
-        Expr::Def(_) => todo!(),
-        Expr::DefMacro(_) => todo!(),
-        Expr::Quote(_) => todo!(),
-        Expr::Recur(_) => todo!(),
-        Expr::Deref(deref) => {
-            let Value::Atomic(atomic) = eval(deref.value()?, environment)? else {
-                bail!(keyword!("eval.error/atomic-expected"))
-            };
-            let guard = atomic.read().expect("poisoned atomic");
-
-            Done(guard.clone())
+impl Trampoline<Value> {
+    pub fn eval_into_result(self) -> Result<Value, Expr> {
+        match self.branch() {
+            ControlFlow::Continue(value) => Ok(value),
+            ControlFlow::Break(Err(err)) => Err(err),
+            _ => unreachable!(),
         }
-        Expr::Atomic(_) => todo!(),
-        Expr::Set(_) => todo!(),
+    }
+}
 
-        // Bridges one-to-one from Value, to Expr, and back to Value.
-        Expr::Fun(fun) => Trampoline::Done(Value::Fun(fun)),
-        Expr::Literal(literal) => Trampoline::Done(Value::Literal(literal)),
+impl Expr {
+    pub fn expand(self, environment: &Environment) -> Result<Value, Expr> {
+        match self {
+            Expr::Fun(_) => todo!(),
+            Expr::List(_) => todo!(),
+            Expr::Apply(_) => todo!(),
+            Expr::Def(_) => todo!(),
+            Expr::Recur(recur) => Ok(Value::Recur {
+                arguments: recur
+                    .spine()?
+                    .into_iter()
+                    .map(|expr| expr.expand(environment))
+                    .collect::<Result<Vec<_>, _>>()?,
+            }),
+            Expr::Deref(deref) => Ok(Value::Deref {
+                value: deref.value()?.expand(environment)?.into(),
+            }),
+            Expr::Atomic(_) => todo!(),
+            Expr::Set(_) => todo!(),
+            Expr::DefMacro(_) => todo!(),
+            Expr::Quote(expr) => Ok(Value::Quote(expr.expression()?)),
+            Expr::Literal(Literal(Term::Atom(keyword))) => Ok(Value::Keyword(Keyword {
+                name: keyword,
+            })),
+            Expr::Literal(Literal(Term::Identifier(identifier))) => Ok(Value::Keyword(Keyword {
+                name: identifier,
+            })),
+            Expr::Literal(Literal(Term::Int(value))) => Ok(Value::Int(value)),
+            Expr::Literal(Literal(Term::String(value))) => Ok(Value::String(value)),
+            Expr::Literal(Literal(Term::Float(_, _))) => todo!(),
+            Expr::Literal(_) => Err(keyword!("eval.error/invalid-literal")),
+        }
+    }
+
+    pub fn eval(self, environment: &Environment) -> Trampoline<Value> {
+        match self.expand(environment)? {
+            Value::Deref { box value, .. } => {
+                let Value::Atomic(atomic) = value else {
+                    bail!(keyword!("eval.error/atomic-expected"))
+                };
+                let guard = atomic.read().expect("poisoned atomic");
+
+                Done(guard.clone())
+            }
+
+            value => Done(value),
+        }
     }
 }
 
