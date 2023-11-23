@@ -29,6 +29,12 @@ impl Display for Term {
     }
 }
 
+impl From<String> for Term {
+    fn from(s: String) -> Self {
+        Term::String(s)
+    }
+}
+
 impl From<usize> for Term {
     fn from(n: usize) -> Self {
         Term::Int(n as u64)

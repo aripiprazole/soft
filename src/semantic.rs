@@ -460,5 +460,5 @@ macro_rules! keyword {
 
 use define_ast;
 use define_builtin;
-use soft_vec;
 pub(crate) use keyword;
+pub(crate) use soft_vec;

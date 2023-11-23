@@ -4,10 +4,14 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use thiserror::Error;
 use Trampoline::{Continue, Done, Raise};
 
 use crate::{
-    semantic::{defmacro::keyword, Expr, Literal},
+    semantic::{
+        defmacro::{keyword, soft_vec},
+        Expr, Literal,
+    },
     SrcPos, Term,
 };
 
@@ -76,7 +80,7 @@ pub enum Value {
     Nil,
 }
 
-#[derive(Hash, Clone, PartialEq, Eq)]
+#[derive(Debug, Hash, Clone, PartialEq, Eq)]
 pub struct Keyword {
     pub name: String,
     pub is_atom: bool,
@@ -137,12 +141,12 @@ impl Trampoline<Value> {
 }
 
 impl TryFrom<Value> for Keyword {
-    type Error = Expr;
+    type Error = ExpansionError;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         match value {
             Value::Keyword(keyword) => Ok(keyword),
-            _ => Err(keyword!("eval.error/keyword-expected")),
+            _ => Err(ExpansionError::ExpectedKeyword),
         }
     }
 }
@@ -200,6 +204,21 @@ fn fun_expand(fun: crate::semantic::Fun, environment: &Environment) -> Result<Va
             .collect::<Result<Vec<_>, _>>()?,
         body: fun.body()?,
     }))
+}
+
+/// Errors that can occur during expansion.
+#[derive(Error, Debug, Clone)]
+pub enum ExpansionError {
+    #[error("expected keyword")]
+    ExpectedKeyword,
+}
+
+impl From<ExpansionError> for Expr {
+    fn from(error: ExpansionError) -> Self {
+        match error {
+            ExpansionError::ExpectedKeyword => keyword!("eval.error/expected-keyword"),
+        }
+    }
 }
 
 impl Expr {
@@ -268,13 +287,38 @@ impl Expr {
     }
 }
 
+/// Errors that can occur during evaluation.
+#[derive(Error, Debug, Clone)]
+pub enum EvalError {
+    #[error("undefined keyword")]
+    UndefinedKeyword(Keyword),
+
+    #[error("expected fun")]
+    ExpectedFun,
+
+    #[error("expected atomic")]
+    ExpectedAtomic,
+}
+
+impl From<EvalError> for Expr {
+    fn from(value: EvalError) -> Self {
+        match value {
+            EvalError::UndefinedKeyword(Keyword { name, .. }) => {
+                soft_vec!(keyword!("eval.error/expected-keyword"), name)
+            }
+            EvalError::ExpectedFun => keyword!("eval.error/expected-fun"),
+            EvalError::ExpectedAtomic => keyword!("eval.error/expected-atomic"),
+        }
+    }
+}
+
 impl Value {
     /// Evaluate the expression into a value.
     pub fn eval(self, environment: &Environment) -> Trampoline<Value> {
         match self {
             Value::Deref { box value, .. } => {
                 let Value::Atomic(atomic) = value else {
-                    bail!(keyword!("eval.error/atomic-expected"))
+                    bail!(EvalError::ExpectedAtomic)
                 };
                 let guard = atomic.read().expect("poisoned atomic");
 
@@ -282,7 +326,7 @@ impl Value {
             }
             Value::Set { box target, value } => {
                 let Value::Atomic(atomic) = target else {
-                    bail!(keyword!("eval.error/atomic-expected"))
+                    bail!(EvalError::ExpectedAtomic)
                 };
                 let mut guard = atomic.write().expect("poisoned atomic");
                 *guard = value.eval(environment)?.clone();
@@ -291,7 +335,7 @@ impl Value {
             Value::Keyword(keyword) if !keyword.is_atom => {
                 match environment.find_definition(keyword.clone()) {
                     Some(Definition { value, .. }) => Done(value),
-                    None => Done(Value::Keyword(keyword)),
+                    None => bail!(EvalError::UndefinedKeyword(keyword)),
                 }
             }
             Value::Apply { callee, arguments } => match callee.eval(environment)? {
@@ -302,7 +346,7 @@ impl Value {
                     }
                     fun.call(environment, new_arguments)
                 }
-                _ => bail!(keyword!("eval.error/fun-expected")),
+                _ => bail!(EvalError::ExpectedFun),
             },
             Value::List(old_elements) => {
                 let mut new_elements = Vec::new();
