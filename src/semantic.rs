@@ -239,8 +239,6 @@ pub mod quote {
 
 /// Literal expression construct, it's a literal value.
 pub mod literal {
-    use std::fmt::Display;
-
     use super::*;
 
     impl ExpressionKind for Literal {
@@ -255,8 +253,20 @@ pub mod literal {
         }
     }
 
+    impl From<u64> for Expr {
+        fn from(value: u64) -> Self {
+            Expr::Literal(Literal(Term::Int(value)))
+        }
+    }
+
+    impl From<usize> for Expr {
+        fn from(value: usize) -> Self {
+            Expr::Literal(Literal(Term::Int(value as u64)))
+        }
+    }
+
     impl Expr {
-        pub fn new_keyword(keyword: impl Display) -> Self {
+        pub fn new_keyword(keyword: &str) -> Self {
             Expr::Literal(Literal(Term::Atom(keyword.to_string())))
         }
 
@@ -303,16 +313,18 @@ pub enum SemanticError {
 impl From<SemanticError> for Expr {
     fn from(value: SemanticError) -> Self {
         match value {
-            SemanticError::InvalidExpression => Expr::new_keyword("error/invalid-expression"),
-            SemanticError::InvalidList => Expr::new_keyword("error/invalid-list"),
-            SemanticError::InvalidArguments => Expr::new_keyword("error/invalid-arguments"),
-            SemanticError::MissingParameters => Expr::new_keyword("error/missing-parameters"),
-            SemanticError::MissingBody => Expr::new_keyword("error/missing-body"),
-            SemanticError::MissingHead => Expr::new_keyword("error/missing-head"),
-            SemanticError::ExpectedString => Expr::new_keyword("error/expected-string"),
-            SemanticError::ExpectedVectorWithSize(_) => Expr::new_keyword("error/expected-vector"),
+            SemanticError::InvalidExpression => keyword!("error/invalid-expression"),
+            SemanticError::InvalidList => keyword!("error/invalid-list"),
+            SemanticError::InvalidArguments => keyword!("error/invalid-arguments"),
+            SemanticError::MissingParameters => keyword!("error/missing-parameters"),
+            SemanticError::MissingBody => keyword!("error/missing-body"),
+            SemanticError::MissingHead => keyword!("error/missing-head"),
+            SemanticError::ExpectedString => keyword!("error/expected-string"),
+            SemanticError::ExpectedVectorWithSize(size) => {
+                soft_vec![keyword!("error/expected-vector"), size]
+            }
             SemanticError::ExpectedQuoteExpression => {
-                Expr::new_keyword("error/expected-quote-expression")
+                keyword!("error/expected-quote-expression")
             }
         }
     }
@@ -396,6 +408,16 @@ macro_rules! define_ast {
             ),+
         }
 
+        impl From<$name> for $crate::Term {
+            fn from(value: $name) -> Self {
+                match value {
+                    $(
+                        $name::$variant(value) => value.into(),
+                    )+
+                }
+            }
+        }
+
         $(
             impl From<$variant> for $name {
                 fn from(value: $variant) -> Self {
@@ -405,10 +427,16 @@ macro_rules! define_ast {
 
             $(#[$field_outer])*
             #[derive(Debug, Clone)]
-            pub struct $variant(crate::Term);
+            pub struct $variant($crate::Term);
+
+            impl From<$variant> for $crate::Term {
+                fn from(value: $variant) -> Self {
+                    value.0
+                }
+            }
 
             impl std::ops::Deref for $variant {
-                type Target = crate::Term;
+                type Target = $crate::Term;
 
                 fn deref(&self) -> &Self::Target {
                     &self.0
@@ -418,5 +446,19 @@ macro_rules! define_ast {
     };
 }
 
+macro_rules! soft_vec {
+    ($($expr:expr),*) => {
+        $crate::semantic::Expr::List($crate::semantic::List($crate::Term::Vec(vec![$($expr.into()),*])))
+    };
+}
+
+macro_rules! keyword {
+    ($str:literal) => {
+        $crate::semantic::Expr::new_keyword($str)
+    };
+}
+
 use define_ast;
 use define_builtin;
+use soft_vec;
+pub(crate) use keyword;

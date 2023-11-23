@@ -29,6 +29,12 @@ impl Display for Term {
     }
 }
 
+impl From<usize> for Term {
+    fn from(n: usize) -> Self {
+        Term::Int(n as u64)
+    }
+}
+
 impl From<Vec<Term>> for Term {
     fn from(terms: Vec<Term>) -> Self {
         Term::List(terms)

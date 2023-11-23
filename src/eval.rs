@@ -5,8 +5,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use Trampoline::{Continue, Done, Raise};
+
 use crate::{
-    semantic::{self, Expr},
+    semantic::{self, defmacro::keyword, Expr},
     SrcPos,
 };
 
@@ -52,9 +54,12 @@ pub fn eval(expr: Expr, environment: Environment) -> Trampoline<Value> {
         Expr::Quote(_) => todo!(),
         Expr::Recur(_) => todo!(),
         Expr::Deref(deref) => {
-            let value = eval(deref.value()?, environment)?;
+            let Value::Atomic(atomic) = eval(deref.value()?, environment)? else {
+                bail!(keyword!("eval.error/atomic-expected"))
+            };
+            let guard = atomic.read().expect("poisoned atomic");
 
-            todo!()
+            Done(guard.clone())
         }
         Expr::Atomic(_) => todo!(),
         Expr::Set(_) => todo!(),
@@ -70,16 +75,16 @@ impl<T> Try for Trampoline<T, Expr> {
     type Residual = Result<Infallible, Expr>;
 
     fn from_output(output: Self::Output) -> Self {
-        Trampoline::Done(output)
+        Done(output)
     }
 
     fn branch(self) -> ControlFlow<Self::Residual, Self::Output> {
         let mut value: Trampoline<T, Expr> = self;
         loop {
             match value {
-                Trampoline::Done(done) => return ControlFlow::Continue(done),
-                Trampoline::Raise(error) => return ControlFlow::Break(Err(error)),
-                Trampoline::Continue(f) => {
+                Done(done) => return ControlFlow::Continue(done),
+                Raise(error) => return ControlFlow::Break(Err(error)),
+                Continue(f) => {
                     value = f();
                 }
             }
@@ -90,8 +95,16 @@ impl<T> Try for Trampoline<T, Expr> {
 impl<T, E, F: From<E>> FromResidual<Result<Infallible, E>> for Trampoline<T, F> {
     fn from_residual(residual: Result<Infallible, E>) -> Self {
         match residual {
-            Err(error) => Trampoline::Raise(From::from(error)),
+            Err(error) => Raise(From::from(error)),
             _ => unreachable!(),
         }
     }
 }
+
+macro_rules! bail {
+    ($expr:expr) => {
+        return $crate::eval::Trampoline::Raise($expr.into())
+    };
+}
+
+use bail;
