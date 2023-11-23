@@ -1,14 +1,11 @@
 use crate::Term;
 
 define_ast!(Expr, {
-    Fun,      // (fun* (a b) (+ a b))
+    Fun,      // (fun* [a b] (+ a b))
     List,     // [a b c] or (list a b c)
     Apply,    // (a b c) or (apply a b c)
-    Def,      // (def a 123)
+    Def,      // (def* a 123)
     Recur,    // (recur a)
-    Deref,    // (deref* 123)
-    Atomic,   // (atomic* 123)
-    Set,      // (set* a 123)
     DefMacro, // (defmacro* a (fun (a b) (+ a b))
     Quote,    // '(fun* (a b) (+ a b))
     Literal   // 123 | "bla" | :bla | bla
@@ -17,9 +14,6 @@ define_ast!(Expr, {
 define_builtin!(DefMacro, "defmacro*", 2);
 define_builtin!(Def, "def*", 2);
 define_builtin!(Recur, "recur");
-define_builtin!(Atomic, "atomic*", 1);
-define_builtin!(Deref, "deref*", 1);
-define_builtin!(Set, "set*", 2);
 define_builtin!(Fun, "fun*", 2);
 define_builtin!(Quote, "'", 2);
 define_builtin!(Apply, "apply");
@@ -123,58 +117,6 @@ pub mod recur {
     }
 }
 
-/// Set expression construct, it's a definition of a value.
-pub mod set {
-    pub use super::*;
-
-    impl Set {
-        /// Returns the name of the definition.
-        pub fn target(&self) -> Result<Expr> {
-            self.0
-                .at(1)
-                .ok_or(SemanticError::InvalidExpression)?
-                .try_into()
-        }
-
-        /// Returns the value of the definition.
-        pub fn value(&self) -> Result<Expr> {
-            self.0
-                .at(2)
-                .ok_or(SemanticError::InvalidExpression)?
-                .try_into()
-        }
-    }
-}
-
-/// Deref expression construct, it's a mutable value.
-pub mod deref {
-    pub use super::*;
-
-    impl Deref {
-        /// Returns the value of the definition.
-        pub fn value(&self) -> Result<Expr> {
-            self.0
-                .at(1)
-                .ok_or(SemanticError::InvalidExpression)?
-                .try_into()
-        }
-    }
-}
-
-/// Atomic expression construct, it's a mutable value.
-pub mod atomic {
-    pub use super::*;
-
-    impl Atomic {
-        /// Returns the value of the definition.
-        pub fn value(&self) -> Result<Expr> {
-            self.0
-                .at(1)
-                .ok_or(SemanticError::InvalidExpression)?
-                .try_into()
-        }
-    }
-}
 
 /// Define expression construct, it's a definition of a value.
 pub mod def {
@@ -343,11 +285,8 @@ impl TryFrom<Term> for Expr {
 
     fn try_from(value: Term) -> Result<Self, Self::Error> {
         DefMacro::try_new(value.clone())
-            .or_else(|_| Atomic::try_new(value.clone()))
-            .or_else(|_| Deref::try_new(value.clone()))
             .or_else(|_| Recur::try_new(value.clone()))
             .or_else(|_| Def::try_new(value.clone()))
-            .or_else(|_| Set::try_new(value.clone()))
             .or_else(|_| Fun::try_new(value.clone()))
             .or_else(|_| Quote::try_new(value.clone()))
             .or_else(|_| Apply::try_new(value.clone()))

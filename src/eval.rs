@@ -64,18 +64,10 @@ pub enum Value {
         name: Keyword,
         value: Box<Value>,
     },
-    Set {
-        target: Box<Value>,
-        value: Box<Value>,
-    },
-    Deref {
-        value: Box<Value>,
-    },
     Recur {
         arguments: Vec<Value>,
     },
     Quote(Expr),
-    Atomic(Arc<RwLock<Value>>),
     Ptr(*mut ()),
     Nil,
 }
@@ -247,18 +239,6 @@ impl Expr {
                     .map(|expr| expr.expand(environment))
                     .collect::<Result<Vec<_>, _>>()?,
             }),
-            Expr::Deref(deref) => Ok(Value::Deref {
-                value: deref.value()?.expand(environment)?.into(),
-            }),
-            Expr::Atomic(atomic) => {
-                let value = atomic.value()?.expand(environment)?;
-                let atomic = Arc::new(RwLock::new(value));
-                Ok(Value::Atomic(atomic))
-            }
-            Expr::Set(set) => Ok(Value::Set {
-                target: set.target()?.expand(environment)?.into(),
-                value: set.value()?.expand(environment)?.into(),
-            }),
             Expr::DefMacro(def_macro) => Ok(Value::DefMacro {
                 name: def_macro.name()?.expand(environment)?.try_into()?,
                 value: def_macro.value()?.expand(environment)?.into(),
@@ -316,22 +296,6 @@ impl Value {
     /// Evaluate the expression into a value.
     pub fn eval(self, environment: &Environment) -> Trampoline<Value> {
         match self {
-            Value::Deref { box value, .. } => {
-                let Value::Atomic(atomic) = value else {
-                    bail!(EvalError::ExpectedAtomic)
-                };
-                let guard = atomic.read().expect("poisoned atomic");
-
-                Done(guard.clone())
-            }
-            Value::Set { box target, value } => {
-                let Value::Atomic(atomic) = target else {
-                    bail!(EvalError::ExpectedAtomic)
-                };
-                let mut guard = atomic.write().expect("poisoned atomic");
-                *guard = value.eval(environment)?.clone();
-                Done(guard.clone())
-            }
             Value::Keyword(keyword) if !keyword.is_atom => {
                 match environment.find_definition(keyword.clone()) {
                     Some(Definition { value, .. }) => Done(value),
