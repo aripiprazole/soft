@@ -52,7 +52,7 @@ define_ast!(Expr, {
 define_builtin!(DefMacro, "defmacro*", 2);
 define_builtin!(Def, "def*", 2);
 define_builtin!(Recur, "recur");
-define_builtin!(Fun, "fun*", 2);
+define_builtin!(Fun, "fun*", 3);
 define_builtin!(Quote, "'", 2);
 define_builtin!(Apply, "apply");
 
@@ -219,17 +219,25 @@ pub mod fun {
     use super::*;
 
     impl Fun {
+        /// Returns the name of the function.
+        pub fn name(&self) -> Result<Expr> {
+            self.0
+                .at(1)
+                .ok_or(SemanticError::InvalidExpression)?
+                .try_into()
+        }
+
         /// Returns a list of parameters that are in the spine of the function.
         pub fn parameters(&self) -> Result<List> {
             self.0
-                .at(1)
+                .at(2)
                 .map(List)
                 .ok_or(SemanticError::MissingParameters)
         }
 
         /// Returns the body of the function.
         pub fn body(&self) -> Result<Expr> {
-            self.0.at(2).ok_or(SemanticError::MissingBody)?.try_into()
+            self.0.at(3).ok_or(SemanticError::MissingBody)?.try_into()
         }
     }
 }

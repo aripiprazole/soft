@@ -27,6 +27,7 @@ pub struct Frame {
 /// Closure function.
 #[derive(Clone)]
 pub struct Fun {
+    pub name: Expr,
     pub parameters: Vec<Keyword>,
     pub body: Expr,
 }
@@ -207,6 +208,7 @@ fn apply_expand(apply: crate::Apply, environment: &Environment) -> Result<Value,
 /// Expand fun expressions.
 fn fun_expand(fun: crate::Fun, environment: &Environment) -> Result<Value, Expr> {
     Ok(Value::Fun(Fun {
+        name: fun.name()?,
         parameters: fun
             .parameters()?
             .elements()?
@@ -230,7 +232,8 @@ impl Expr {
             // Base cases for expansion when it will just walk the tree. These
             // are the cases where the expansion is recursive.
             Expr::List(list) => Ok(Value::List(
-                /* elements: */ list.elements()?
+                /* elements: */
+                list.elements()?
                     .into_iter()
                     .map(|expr| expr.expand(environment))
                     .collect::<Result<Vec<_>, _>>()?,
@@ -240,7 +243,8 @@ impl Expr {
                 /* value: */ def.value()?.expand(environment)?.into(),
             )),
             Expr::Recur(recur) => Ok(Value::Recur(
-                /* arguments: */ recur
+                /* arguments: */
+                recur
                     .spine()?
                     .into_iter()
                     .map(|expr| expr.expand(environment))
