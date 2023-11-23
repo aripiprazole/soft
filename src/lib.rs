@@ -3,10 +3,15 @@
 
 use std::fmt::Display;
 
-pub mod eval;
-pub mod parser;
-
 pub type Result<T, E = SemanticError> = std::result::Result<T, E>;
+
+/// Evaluation of the Soft programming language, it will transform an [crate::Expr] into
+/// a [crate::eval::Value].
+pub mod eval;
+
+/// Tokenization/lexing and parsing of Soft programming language, it will transform a string
+/// into [crate::Term].
+pub mod parser;
 
 /// Term is a recursive data structure that represents a list of terms, an atom, an identifier,
 /// or an integer.
@@ -30,6 +35,9 @@ pub trait ExprKind: Sized {
 
 // Abstract-Syntax-Tree (AST) for the Soft programming language. It's the representation
 // of abstract terms in the language.
+//
+// It's the specialized phase of the language, where we have a concrete syntax and we
+// can start to evaluate the program.
 define_ast!(Expr, {
     Fun,      // (fun* [a b] (+ a b))
     List,     // [a b c] or (list a b c)

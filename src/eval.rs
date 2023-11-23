@@ -52,17 +52,9 @@ pub enum Value {
         callee: Box<Value>,
         arguments: Vec<Value>,
     },
-    Def {
-        name: Keyword,
-        value: Box<Value>,
-    },
-    DefMacro {
-        name: Keyword,
-        value: Box<Value>,
-    },
-    Recur {
-        arguments: Vec<Value>,
-    },
+    Def(Keyword, Box<Value>),
+    DefMacro(Keyword, Box<Value>),
+    Recur(Vec<Value>),
     Quote(Expr),
     Ptr(*mut ()),
     Nil,
@@ -135,6 +127,8 @@ impl Environment {
     }
 }
 
+/// A trampoline for evaluation. It's treated like a result, but it can also
+/// contain a continuation.
 pub enum Trampoline<T, E = Expr> {
     Done(T),
     Raise(E),
@@ -236,26 +230,26 @@ impl Expr {
             // Base cases for expansion when it will just walk the tree. These
             // are the cases where the expansion is recursive.
             Expr::List(list) => Ok(Value::List(
-                list.elements()?
+                /* elements: */ list.elements()?
                     .into_iter()
                     .map(|expr| expr.expand(environment))
                     .collect::<Result<Vec<_>, _>>()?,
             )),
-            Expr::Def(def) => Ok(Value::Def {
-                name: def.name()?.expand(environment)?.try_into()?,
-                value: def.value()?.expand(environment)?.into(),
-            }),
-            Expr::Recur(recur) => Ok(Value::Recur {
-                arguments: recur
+            Expr::Def(def) => Ok(Value::Def(
+                /* name : */ def.name()?.expand(environment)?.try_into()?,
+                /* value: */ def.value()?.expand(environment)?.into(),
+            )),
+            Expr::Recur(recur) => Ok(Value::Recur(
+                /* arguments: */ recur
                     .spine()?
                     .into_iter()
                     .map(|expr| expr.expand(environment))
                     .collect::<Result<Vec<_>, _>>()?,
-            }),
-            Expr::DefMacro(def_macro) => Ok(Value::DefMacro {
-                name: def_macro.name()?.expand(environment)?.try_into()?,
-                value: def_macro.value()?.expand(environment)?.into(),
-            }),
+            )),
+            Expr::DefMacro(def_macro) => Ok(Value::DefMacro(
+                /* name : */ def_macro.name()?.expand(environment)?.try_into()?,
+                /* value: */ def_macro.value()?.expand(environment)?.into(),
+            )),
 
             // Expansion of literal terms, just wrap them in a value. This is
             // the base case of the expansion.
