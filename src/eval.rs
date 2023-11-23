@@ -79,11 +79,15 @@ pub enum Value {
 #[derive(Hash, Clone, PartialEq, Eq)]
 pub struct Keyword {
     pub name: String,
+    pub is_atom: bool,
 }
 
 impl From<String> for Keyword {
     fn from(name: String) -> Self {
-        Self { name }
+        Self {
+            name,
+            is_atom: false,
+        }
     }
 }
 
@@ -91,6 +95,7 @@ impl From<&str> for Keyword {
     fn from(name: &str) -> Self {
         Self {
             name: name.to_string(),
+            is_atom: false,
         }
     }
 }
@@ -246,14 +251,17 @@ impl Expr {
             Expr::Literal(Literal(Term::Int(value))) => Ok(Value::Int(value)),
             Expr::Literal(Literal(Term::String(value))) => Ok(Value::String(value)),
             Expr::Literal(Literal(Term::Float(_, _))) => todo!(),
-            Expr::Literal(Literal(Term::Identifier(name) | Term::Atom(name))) => {
-                if let Some(definition) = environment.find_definition(name.clone()) {
+            Expr::Literal(Literal(ref t @ Term::Identifier(ref n) | ref t @ Term::Atom(ref n))) => {
+                if let Some(definition) = environment.find_definition(n.clone()) {
                     if definition.is_macro_definition {
                         return Ok(definition.value.clone());
                     }
                 }
 
-                Ok(Value::Keyword(Keyword { name }))
+                Ok(Value::Keyword(Keyword {
+                    name: n.clone(),
+                    is_atom: matches!(t, Term::Atom(_)),
+                }))
             }
             Expr::Literal(_) => Err(keyword!("eval.error/invalid-literal")),
         }
@@ -272,9 +280,30 @@ impl Value {
 
                 Done(guard.clone())
             }
-            Value::Apply { callee, arguments } => {
-                todo!()
+            Value::Set { box target, value } => {
+                let Value::Atomic(atomic) = target else {
+                    bail!(keyword!("eval.error/atomic-expected"))
+                };
+                let mut guard = atomic.write().expect("poisoned atomic");
+                *guard = value.eval(environment)?.clone();
+                Done(guard.clone())
             }
+            Value::Keyword(keyword) if !keyword.is_atom => {
+                match environment.find_definition(keyword.clone()) {
+                    Some(Definition { value, .. }) => Done(value),
+                    None => Done(Value::Keyword(keyword)),
+                }
+            }
+            Value::Apply { callee, arguments } => match callee.eval(environment)? {
+                Value::Fun(fun) => {
+                    let mut new_arguments = Vec::new();
+                    for argument in arguments {
+                        new_arguments.push(argument.eval(environment)?);
+                    }
+                    fun.call(environment, new_arguments)
+                }
+                _ => bail!(keyword!("eval.error/fun-expected")),
+            },
             Value::List(old_elements) => {
                 let mut new_elements = Vec::new();
                 for element in old_elements {
@@ -283,6 +312,7 @@ impl Value {
 
                 Done(Value::List(new_elements))
             }
+            Value::DefMacro { .. } | Value::Def { .. } => Done(Value::Nil),
 
             // Base cases for evaluation when it will just walk the tree. These
             // are the cases where the evaluation is recursive.
