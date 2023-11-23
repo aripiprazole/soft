@@ -26,25 +26,6 @@ pub struct Frame {
     pub is_catching_scope: bool,
 }
 
-#[derive(Hash, Clone, PartialEq, Eq)]
-pub struct Keyword {
-    pub name: String,
-}
-
-impl From<String> for Keyword {
-    fn from(name: String) -> Self {
-        Self { name }
-    }
-}
-
-impl From<&str> for Keyword {
-    fn from(name: &str) -> Self {
-        Self {
-            name: name.to_string(),
-        }
-    }
-}
-
 #[derive(Clone)]
 pub struct Fun {
     pub parameters: Vec<Keyword>,
@@ -97,6 +78,25 @@ pub enum Value {
     Nil,
 }
 
+#[derive(Hash, Clone, PartialEq, Eq)]
+pub struct Keyword {
+    pub name: String,
+}
+
+impl From<String> for Keyword {
+    fn from(name: String) -> Self {
+        Self { name }
+    }
+}
+
+impl From<&str> for Keyword {
+    fn from(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+        }
+    }
+}
+
 pub struct Environment {
     pub global: Value,
     pub expanded: bool,
@@ -144,22 +144,70 @@ impl TryFrom<Value> for Keyword {
     }
 }
 
+/// Expand apply expressions.
+fn apply_expand(apply: crate::semantic::Apply, environment: &Environment) -> Result<Value, Expr> {
+    let callee = apply.callee()?;
+    if let Expr::Literal(Literal(Term::Identifier(k) | Term::Atom(k))) = callee {
+        return match environment.find_definition(k.clone()) {
+            Some(Definition {
+                name: _,
+                value: Value::Fun(fun),
+                is_macro_definition,
+            }) if is_macro_definition => {
+                let arguments = apply
+                    .spine()?
+                    .into_iter()
+                    .map(|expr| expr.expand(environment))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                fun.call(environment, arguments).eval_into_result()
+            }
+            None | Some(_) => Ok(Value::Apply {
+                callee: Value::Keyword(Keyword::from(k.clone())).into(),
+                arguments: apply
+                    .spine()?
+                    .into_iter()
+                    .map(|expr| expr.expand(environment))
+                    .collect::<Result<Vec<_>, _>>()?,
+            }),
+        };
+    }
+
+    Ok(Value::Apply {
+        callee: callee.expand(environment)?.into(),
+        arguments: apply
+            .spine()?
+            .into_iter()
+            .map(|expr| expr.expand(environment))
+            .collect::<Result<Vec<_>, _>>()?,
+    })
+}
+
+/// Expand fun expressions.
+fn fun_expand(fun: crate::semantic::Fun, environment: &Environment) -> Result<Value, Expr> {
+    Ok(Value::Fun(Fun {
+        parameters: fun
+            .parameters()?
+            .elements()?
+            .into_iter()
+            .map(|expr| expr.expand(environment))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|value| value.try_into())
+            .collect::<Result<Vec<_>, _>>()?,
+        body: fun.body()?,
+    }))
+}
+
 impl Expr {
     /// Expand the expression into a value.
     pub fn expand(self, environment: &Environment) -> Result<Value, Expr> {
         match self {
-            Expr::Fun(fun) => Ok(Value::Fun(Fun {
-                parameters: fun
-                    .parameters()?
-                    .elements()?
-                    .into_iter()
-                    .map(|expr| expr.expand(environment))
-                    .collect::<Result<Vec<_>, _>>()?
-                    .into_iter()
-                    .map(|value| value.try_into())
-                    .collect::<Result<Vec<_>, _>>()?,
-                body: fun.body()?,
-            })),
+            Expr::Apply(apply) => apply_expand(apply, environment),
+            Expr::Fun(fun) => fun_expand(fun, environment),
+
+            // Base cases for expansion when it will just walk the tree. These
+            // are the cases where the expansion is recursive.
             Expr::List(list) => Ok(Value::List {
                 elements: list
                     .elements()?
@@ -167,43 +215,6 @@ impl Expr {
                     .map(|expr| expr.expand(environment))
                     .collect::<Result<Vec<_>, _>>()?,
             }),
-            Expr::Apply(apply) => {
-                let callee = apply.callee()?;
-                if let Expr::Literal(Literal(Term::Identifier(k) | Term::Atom(k))) = callee {
-                    return match environment.find_definition(k.clone()) {
-                        Some(Definition {
-                            name: _,
-                            value: Value::Fun(fun),
-                            is_macro_definition,
-                        }) if is_macro_definition => {
-                            let arguments = apply
-                                .spine()?
-                                .into_iter()
-                                .map(|expr| expr.expand(environment))
-                                .collect::<Result<Vec<_>, _>>()?;
-
-                            fun.call(environment, arguments).eval_into_result()
-                        }
-                        None | Some(_) => Ok(Value::Apply {
-                            callee: Value::Keyword(Keyword::from(k.clone())).into(),
-                            arguments: apply
-                                .spine()?
-                                .into_iter()
-                                .map(|expr| expr.expand(environment))
-                                .collect::<Result<Vec<_>, _>>()?,
-                        }),
-                    };
-                }
-
-                Ok(Value::Apply {
-                    callee: callee.expand(environment)?.into(),
-                    arguments: apply
-                        .spine()?
-                        .into_iter()
-                        .map(|expr| expr.expand(environment))
-                        .collect::<Result<Vec<_>, _>>()?,
-                })
-            }
             Expr::Def(def) => Ok(Value::Def {
                 name: def.name()?.expand(environment)?.try_into()?,
                 value: def.value()?.expand(environment)?.into(),
@@ -231,6 +242,9 @@ impl Expr {
                 name: def_macro.name()?.expand(environment)?.try_into()?,
                 value: def_macro.value()?.expand(environment)?.into(),
             }),
+
+            // Expansion of literal terms, just wrap them in a value. This is
+            // the base case of the expansion.
             Expr::Quote(expr) => Ok(Value::Quote(expr.expression()?)),
             Expr::Literal(Literal(Term::Int(value))) => Ok(Value::Int(value)),
             Expr::Literal(Literal(Term::String(value))) => Ok(Value::String(value)),
