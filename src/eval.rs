@@ -7,13 +7,7 @@ use std::{
 use thiserror::Error;
 use Trampoline::{Continue, Done, Raise};
 
-use crate::{
-    semantic::{
-        defmacro::{keyword, soft_vec},
-        Expr, Literal,
-    },
-    SrcPos, Term,
-};
+use crate::{keyword, soft_vec, Expr, Literal, SrcPos, Term};
 
 #[derive(Clone)]
 pub struct Definition {
@@ -30,20 +24,22 @@ pub struct Frame {
     pub is_catching_scope: bool,
 }
 
+/// Closure function.
 #[derive(Clone)]
 pub struct Fun {
     pub parameters: Vec<Keyword>,
     pub body: Expr,
 }
 
-impl Fun {
-    pub fn call(&self, environment: &Environment, arguments: Vec<Value>) -> Trampoline<Value> {
-        let _ = environment;
-        let _ = arguments;
-        todo!()
-    }
+/// Bail out of the current evaluation with an error.
+macro_rules! bail {
+    ($expr:expr) => {
+        return $crate::eval::Trampoline::Raise($expr.into())
+    };
 }
 
+/// A value in the language. It's the lowest level of representation of a
+/// value, and is used for both the AST and the runtime.
 #[derive(Clone)]
 pub enum Value {
     Int(u64),
@@ -78,28 +74,51 @@ pub struct Keyword {
     pub is_atom: bool,
 }
 
-impl From<String> for Keyword {
-    fn from(name: String) -> Self {
-        Self {
-            name,
-            is_atom: false,
-        }
-    }
-}
-
-impl From<&str> for Keyword {
-    fn from(name: &str) -> Self {
-        Self {
-            name: name.to_string(),
-            is_atom: false,
-        }
-    }
-}
-
+/// The environment in which evaluation takes place.
 pub struct Environment {
     pub global: Value,
     pub expanded: bool,
     pub frames: Arc<RwLock<im::Vector<Frame>>>,
+}
+
+/// Errors that can occur during evaluation.
+#[derive(Error, Debug, Clone)]
+pub enum EvalError {
+    #[error("undefined keyword")]
+    UndefinedKeyword(Keyword),
+
+    #[error("expected fun")]
+    ExpectedFun,
+
+    #[error("expected atomic")]
+    ExpectedAtomic,
+}
+
+impl From<EvalError> for Expr {
+    fn from(value: EvalError) -> Self {
+        match value {
+            EvalError::UndefinedKeyword(Keyword { name, .. }) => {
+                soft_vec!(keyword!("eval.error/expected-keyword"), name)
+            }
+            EvalError::ExpectedFun => keyword!("eval.error/expected-fun"),
+            EvalError::ExpectedAtomic => keyword!("eval.error/expected-atomic"),
+        }
+    }
+}
+
+/// Errors that can occur during expansion.
+#[derive(Error, Debug, Clone)]
+pub enum ExpansionError {
+    #[error("expected keyword")]
+    ExpectedKeyword,
+}
+
+impl From<ExpansionError> for Expr {
+    fn from(error: ExpansionError) -> Self {
+        match error {
+            ExpansionError::ExpectedKeyword => keyword!("eval.error/expected-keyword"),
+        }
+    }
 }
 
 impl Environment {
@@ -143,8 +162,17 @@ impl TryFrom<Value> for Keyword {
     }
 }
 
+impl Fun {
+    /// Call the function.
+    pub fn call(&self, environment: &Environment, arguments: Vec<Value>) -> Trampoline<Value> {
+        let _ = environment;
+        let _ = arguments;
+        todo!()
+    }
+}
+
 /// Expand apply expressions.
-fn apply_expand(apply: crate::semantic::Apply, environment: &Environment) -> Result<Value, Expr> {
+fn apply_expand(apply: crate::Apply, environment: &Environment) -> Result<Value, Expr> {
     let callee = apply.callee()?;
     if let Expr::Literal(Literal(Term::Identifier(k) | Term::Atom(k))) = callee {
         return match environment.find_definition(k.clone()) {
@@ -183,7 +211,7 @@ fn apply_expand(apply: crate::semantic::Apply, environment: &Environment) -> Res
 }
 
 /// Expand fun expressions.
-fn fun_expand(fun: crate::semantic::Fun, environment: &Environment) -> Result<Value, Expr> {
+fn fun_expand(fun: crate::Fun, environment: &Environment) -> Result<Value, Expr> {
     Ok(Value::Fun(Fun {
         parameters: fun
             .parameters()?
@@ -196,21 +224,6 @@ fn fun_expand(fun: crate::semantic::Fun, environment: &Environment) -> Result<Va
             .collect::<Result<Vec<_>, _>>()?,
         body: fun.body()?,
     }))
-}
-
-/// Errors that can occur during expansion.
-#[derive(Error, Debug, Clone)]
-pub enum ExpansionError {
-    #[error("expected keyword")]
-    ExpectedKeyword,
-}
-
-impl From<ExpansionError> for Expr {
-    fn from(error: ExpansionError) -> Self {
-        match error {
-            ExpansionError::ExpectedKeyword => keyword!("eval.error/expected-keyword"),
-        }
-    }
 }
 
 impl Expr {
@@ -246,7 +259,7 @@ impl Expr {
 
             // Expansion of literal terms, just wrap them in a value. This is
             // the base case of the expansion.
-            Expr::Quote(expr) => Ok(Value::Quote(expr.expression()?)),
+            Expr::Quote(expr) => Ok(Value::Quote(expr.expr()?)),
             Expr::Literal(Literal(Term::Int(value))) => Ok(Value::Int(value)),
             Expr::Literal(Literal(Term::String(value))) => Ok(Value::String(value)),
             Expr::Literal(Literal(Term::Float(_, _))) => todo!(),
@@ -263,31 +276,6 @@ impl Expr {
                 }))
             }
             Expr::Literal(_) => Err(keyword!("eval.error/invalid-literal")),
-        }
-    }
-}
-
-/// Errors that can occur during evaluation.
-#[derive(Error, Debug, Clone)]
-pub enum EvalError {
-    #[error("undefined keyword")]
-    UndefinedKeyword(Keyword),
-
-    #[error("expected fun")]
-    ExpectedFun,
-
-    #[error("expected atomic")]
-    ExpectedAtomic,
-}
-
-impl From<EvalError> for Expr {
-    fn from(value: EvalError) -> Self {
-        match value {
-            EvalError::UndefinedKeyword(Keyword { name, .. }) => {
-                soft_vec!(keyword!("eval.error/expected-keyword"), name)
-            }
-            EvalError::ExpectedFun => keyword!("eval.error/expected-fun"),
-            EvalError::ExpectedAtomic => keyword!("eval.error/expected-atomic"),
         }
     }
 }
@@ -360,10 +348,20 @@ impl<T, E, F: From<E>> FromResidual<Result<Infallible, E>> for Trampoline<T, F> 
     }
 }
 
-macro_rules! bail {
-    ($expr:expr) => {
-        return $crate::eval::Trampoline::Raise($expr.into())
-    };
+impl From<String> for Keyword {
+    fn from(name: String) -> Self {
+        Self {
+            name,
+            is_atom: false,
+        }
+    }
 }
 
-use bail;
+impl From<&str> for Keyword {
+    fn from(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            is_atom: false,
+        }
+    }
+}
