@@ -1,6 +1,6 @@
 use std::{iter::Peekable, str::Chars};
 
-use crate::{Term, SrcPos};
+use crate::{SrcPos, Term};
 
 pub fn is_identifier_char(c: char) -> bool {
     c != ' ' && c != '\n' && c != '\t' && c != '(' && c != ')' && c != '"' && c != ';'

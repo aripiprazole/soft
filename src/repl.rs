@@ -32,7 +32,7 @@ pub fn repl() {
         if rl.load_history(&path).is_err() {
             println!("No previous history.");
         }
-    } 
+    }
 
     loop {
         let readline = rl.readline("> ");
@@ -53,10 +53,10 @@ pub fn repl() {
                 println!("Error: {err:?}");
                 break;
             }
-        }   
+        }
     }
 
     if let Some(path) = path {
-        let _ =rl.append_history(&path);
+        let _ = rl.append_history(&path);
     }
 }

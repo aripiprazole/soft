@@ -117,7 +117,6 @@ pub mod recur {
     }
 }
 
-
 /// Define expression construct, it's a definition of a value.
 pub mod def {
     pub use super::*;

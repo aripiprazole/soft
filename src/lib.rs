@@ -3,9 +3,9 @@
 
 use std::fmt::Display;
 
-pub mod semantic;
-pub mod parser;
 pub mod eval;
+pub mod parser;
+pub mod semantic;
 
 /// Term is a recursive data structure that represents a list of terms, an atom, an identifier,
 /// or an integer.
@@ -56,7 +56,7 @@ impl Term {
                     width += t.width();
                 }
                 width
-            },
+            }
             Term::Atom(s) => s.len(),
             Term::Identifier(s) => s.len(),
             Term::Int(n) => n.to_string().len(),
@@ -66,7 +66,7 @@ impl Term {
         }
     }
 
-    fn pretty_print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize)-> std::fmt::Result  {
+    fn pretty_print(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
         match self {
             Term::List(s) | Term::Vec(s) => {
                 if self.width() + indent > 80 {
@@ -80,7 +80,7 @@ impl Term {
                 }
 
                 Ok(())
-            },
+            }
             Term::Atom(s) => write!(f, ":{}", s),
             Term::Identifier(s) => write!(f, "{}", s),
             Term::Int(s) => write!(f, "{}", s),

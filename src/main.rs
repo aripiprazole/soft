@@ -1,5 +1,3 @@
-
-
 pub mod repl;
 
 use clap::Parser;
@@ -19,7 +17,6 @@ struct Args {
 }
 
 fn main() -> miette::Result<()> {
-
     // Install the panic handler.
     bupropion::install(bupropion::BupropionHandlerOpts::new).into_diagnostic()?;
 
