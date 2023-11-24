@@ -1,9 +1,11 @@
 use std::{
     convert::Infallible,
+    fmt::Display,
     ops::{ControlFlow, FromResidual, Try},
     sync::{Arc, RwLock},
 };
 
+use im::HashMap;
 use thiserror::Error;
 use Trampoline::{Continue, Done, Raise};
 
@@ -18,7 +20,7 @@ pub struct Definition {
 
 #[derive(Clone)]
 pub struct Frame {
-    pub name: Option<String>,
+    pub name: Option<Expr>,
     pub src_pos: SrcPos,
     pub definitions: im::HashMap<Keyword, Definition>,
     pub is_catching_scope: bool,
@@ -30,6 +32,7 @@ pub struct Fun {
     pub name: Expr,
     pub parameters: Vec<Keyword>,
     pub body: Expr,
+    pub environment: Arc<Environment>,
 }
 
 /// Bail out of the current evaluation with an error.
@@ -67,36 +70,18 @@ pub struct Keyword {
     pub is_atom: bool,
 }
 
+impl Keyword {
+    pub fn is_keyword(&self, name: &str) -> bool {
+        self.name == name
+    }
+}
+
 /// The environment in which evaluation takes place.
+#[derive(Clone)]
 pub struct Environment {
     pub global: Value,
     pub expanded: bool,
     pub frames: Arc<RwLock<im::Vector<Frame>>>,
-}
-
-/// Errors that can occur during evaluation.
-#[derive(Error, Debug, Clone)]
-pub enum EvalError {
-    #[error("undefined keyword")]
-    UndefinedKeyword(Keyword),
-
-    #[error("expected fun")]
-    ExpectedFun,
-
-    #[error("expected atomic")]
-    ExpectedAtomic,
-}
-
-impl From<EvalError> for Expr {
-    fn from(value: EvalError) -> Self {
-        match value {
-            EvalError::UndefinedKeyword(Keyword { name, .. }) => {
-                soft_vec!(keyword!("eval.error/expected-keyword"), name)
-            }
-            EvalError::ExpectedFun => keyword!("eval.error/expected-fun"),
-            EvalError::ExpectedAtomic => keyword!("eval.error/expected-atomic"),
-        }
-    }
 }
 
 /// Errors that can occur during expansion.
@@ -114,17 +99,32 @@ impl From<ExpansionError> for Expr {
     }
 }
 
-impl Environment {
-    /// Find a definition in the environment.
-    pub fn find_definition(&self, name: impl Into<Keyword>) -> Option<Definition> {
-        let name: Keyword = name.into();
-        for frame in self.frames.read().unwrap().iter().rev() {
-            if let Some(expr) = frame.definitions.get(&name) {
-                return Some(expr.clone());
-            }
-        }
+/// Errors that can occur during evaluation.
+#[derive(Error, Debug, Clone)]
+pub enum EvalError {
+    #[error("undefined keyword")]
+    UndefinedKeyword(Keyword),
 
-        None
+    #[error("expected fun")]
+    ExpectedFun,
+
+    #[error("expected atomic")]
+    ExpectedAtomic,
+
+    #[error("incorrect arity")]
+    IncorrectArity,
+}
+
+impl From<EvalError> for Expr {
+    fn from(value: EvalError) -> Self {
+        match value {
+            EvalError::UndefinedKeyword(Keyword { name, .. }) => {
+                soft_vec!(keyword!("eval.error/expected-keyword"), name)
+            }
+            EvalError::ExpectedFun => keyword!("eval.error/expected-fun"),
+            EvalError::ExpectedAtomic => keyword!("eval.error/expected-atomic"),
+            EvalError::IncorrectArity => keyword!("eval.error/incorrect-arity"),
+        }
     }
 }
 
@@ -157,12 +157,82 @@ impl TryFrom<Value> for Keyword {
     }
 }
 
+impl Frame {
+    /// Set a definition in the frame.
+    pub fn insert_definition(&mut self, name: impl Into<Keyword>, value: Value) {
+        let keyword: Keyword = name.into();
+        self.definitions.insert(keyword.clone(), Definition {
+            is_macro_definition: false,
+            name: keyword.name,
+            value,
+        });
+    }
+}
+
+impl Environment {
+    /// Find a definition in the environment.
+    pub fn find_definition(&self, name: impl Into<Keyword>) -> Option<Definition> {
+        let name: Keyword = name.into();
+        for frame in self.frames.read().unwrap().iter().rev() {
+            if let Some(expr) = frame.definitions.get(&name) {
+                return Some(expr.clone());
+            }
+        }
+
+        None
+    }
+
+    /// Add frame to the environment.
+    pub fn push_frame(&self, name: Expr, src_pos: SrcPos) {
+        self.frames.write().unwrap().push_back(Frame {
+            src_pos,
+            name: Some(name),
+            definitions: im::HashMap::new(),
+            is_catching_scope: false,
+        });
+    }
+}
+
+/// Associate parameters with arguments.
+fn associate_parameters(
+    mut parameters: Vec<Keyword>,
+    mut arguments: Vec<Value>,
+) -> Trampoline<HashMap<Keyword, Value>> {
+    // last two vararg & and the name
+    let len = parameters.len();
+    let mut environment = im::HashMap::new();
+    let vararg_parameter = if len > 2 && parameters[len - 2].is_keyword("&") {
+        parameters.remove(parameters.len() - 2); // remove &
+        Some(parameters[parameters.len() - 1].clone())
+    } else {
+        None
+    };
+
+    for (index, parameter) in parameters.iter().enumerate() {
+        match (arguments.first(), vararg_parameter.clone()) {
+            (Some(_), Some(ref parameter)) if index == parameters.len() - 1 => {
+                environment.insert(parameter.clone(), Value::List(arguments));
+                break;
+            }
+            (None, _) => bail!(EvalError::IncorrectArity),
+            (Some(argument), _) => environment.insert(parameter.clone(), argument.clone()),
+        };
+
+        arguments.remove(0);
+    }
+
+    Done(environment)
+}
+
 impl Fun {
     /// Call the function.
     pub fn call(&self, environment: &Environment, arguments: Vec<Value>) -> Trampoline<Value> {
-        let _ = environment;
-        let _ = arguments;
-        todo!()
+        environment.push_frame(self.name.clone(), SrcPos::default());
+
+        loop {
+            let mut frame = self.environment.frames.write().unwrap().back_mut().unwrap();
+            let new_environment = associate_parameters(self.parameters.clone(), arguments.clone());
+        }
     }
 }
 
@@ -219,6 +289,7 @@ fn fun_expand(fun: crate::Fun, environment: &Environment) -> Result<Value, Expr>
             .map(|value| value.try_into())
             .collect::<Result<Vec<_>, _>>()?,
         body: fun.body()?,
+        environment: Arc::new(environment.clone()),
     }))
 }
 

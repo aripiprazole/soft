@@ -53,7 +53,7 @@ define_builtin!(DefMacro, "defmacro*", 2);
 define_builtin!(Def, "def*", 2);
 define_builtin!(Recur, "recur");
 define_builtin!(Fun, "fun*", 3);
-define_builtin!(Quote, "'", 2);
+define_builtin!(Quote, "quote", 2);
 define_builtin!(Apply, "apply");
 
 /// Semantic errors that can occur during the specialization of an expression.
