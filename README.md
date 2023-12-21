@@ -2,7 +2,7 @@
 
 ![banner]
 
-**This is a LISP made by a Sofia and Gabi :>**
+**This is a LISP**
 
 [Introduction](#introduction) •
 [Roadmap](#roadmap)
@@ -11,7 +11,7 @@
 
 # Introduction
 
-This is a LISP made by a couple that compiles to LLVM in order to make it fast,
+This is a LISP that compiles to LLVM in order to make it fast,
 but it's meant to compile itself in order to be cool :P
 
 # Roadmap
