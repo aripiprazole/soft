@@ -231,18 +231,14 @@ impl Fun {
 
         loop {
             let mut current_environment = self.environment.frames.write().unwrap();
-            let mut frame = current_environment.back_mut().unwrap();
-            let new_environment = associate_parameters(self.parameters.clone(), arguments.clone())?
-                .into_iter()
-                .map(|(keyword, value)| {
-                    (keyword.clone(), Definition {
-                        is_macro_definition: false,
-                        name: keyword.name,
-                        value,
-                    })
+            let frame = current_environment.back_mut().unwrap();
+            for (name, value) in associate_parameters(self.parameters.clone(), arguments.clone())? {
+                frame.definitions.insert(name.clone(), Definition {
+                    is_macro_definition: false,
+                    name: name.name,
+                    value,
                 });
-
-            frame.definitions.extend(new_environment);
+            }
         }
     }
 }
