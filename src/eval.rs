@@ -230,8 +230,19 @@ impl Fun {
         environment.push_frame(self.name.clone(), SrcPos::default());
 
         loop {
-            let mut frame = self.environment.frames.write().unwrap().back_mut().unwrap();
-            let new_environment = associate_parameters(self.parameters.clone(), arguments.clone());
+            let mut current_environment = self.environment.frames.write().unwrap();
+            let mut frame = current_environment.back_mut().unwrap();
+            let new_environment = associate_parameters(self.parameters.clone(), arguments.clone())?
+                .into_iter()
+                .map(|(keyword, value)| {
+                    (keyword.clone(), Definition {
+                        is_macro_definition: false,
+                        name: keyword.name,
+                        value,
+                    })
+                });
+
+            frame.definitions.extend(new_environment);
         }
     }
 }
