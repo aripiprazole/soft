@@ -1,6 +1,5 @@
 use std::{
     convert::Infallible,
-    fmt::Display,
     ops::{ControlFlow, FromResidual, Try},
     sync::{Arc, RwLock},
 };
