@@ -66,13 +66,13 @@ pub enum Value {
 
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
 pub struct Keyword {
-    pub name: String,
+    pub text: String,
     pub is_atom: bool,
 }
 
 impl Keyword {
     pub fn is_keyword(&self, name: &str) -> bool {
-        self.name == name
+        self.text == name
     }
 }
 
@@ -118,7 +118,7 @@ pub enum EvalError {
 impl From<EvalError> for Expr {
     fn from(value: EvalError) -> Self {
         match value {
-            EvalError::UndefinedKeyword(Keyword { name, .. }) => {
+            EvalError::UndefinedKeyword(Keyword { text: name, .. }) => {
                 soft_vec!(keyword!("eval.error/expected-keyword"), name)
             }
             EvalError::ExpectedFun => keyword!("eval.error/expected-fun"),
@@ -163,7 +163,7 @@ impl Frame {
         let keyword: Keyword = name.into();
         self.definitions.insert(keyword.clone(), Definition {
             is_macro_definition: false,
-            name: keyword.name,
+            name: keyword.text,
             value,
         });
     }
@@ -229,17 +229,17 @@ impl Fun {
     pub fn call(&self, environment: &Environment, arguments: Vec<Value>) -> Trampoline<Value> {
         environment.push_frame(self.name.clone(), SrcPos::default());
 
-        loop {
-            let mut current_environment = self.environment.frames.write().unwrap();
-            let frame = current_environment.back_mut().unwrap();
-            for (name, value) in associate_parameters(self.parameters.clone(), arguments.clone())? {
-                frame.definitions.insert(name.clone(), Definition {
-                    is_macro_definition: false,
-                    name: name.name,
-                    value,
-                });
-            }
+        let mut current_environment = self.environment.frames.write().unwrap();
+        let frame = current_environment.back_mut().unwrap();
+        for (name, value) in associate_parameters(self.parameters.clone(), arguments.clone())? {
+            frame.definitions.insert(name.clone(), Definition {
+                is_macro_definition: false,
+                name: name.text,
+                value,
+            });
         }
+
+        self.body.clone().expand(environment)?.eval(environment)
     }
 }
 
@@ -347,7 +347,7 @@ impl Expr {
                 }
 
                 Ok(Value::Keyword(Keyword {
-                    name: n.clone(),
+                    text: n.clone(),
                     is_atom: matches!(t, Term::Atom(_)),
                 }))
             }
@@ -427,7 +427,7 @@ impl<T, E, F: From<E>> FromResidual<Result<Infallible, E>> for Trampoline<T, F> 
 impl From<String> for Keyword {
     fn from(name: String) -> Self {
         Self {
-            name,
+            text: name,
             is_atom: false,
         }
     }
@@ -436,7 +436,7 @@ impl From<String> for Keyword {
 impl From<&str> for Keyword {
     fn from(name: &str) -> Self {
         Self {
-            name: name.to_string(),
+            text: name.to_string(),
             is_atom: false,
         }
     }
