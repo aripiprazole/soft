@@ -43,7 +43,7 @@ macro_rules! bail {
 
 /// A value in the language. It's the lowest level of representation of a
 /// value, and is used for both the AST and the runtime.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub enum Value {
     Int(u64),
     Keyword(Keyword),
@@ -60,7 +60,16 @@ pub enum Value {
     Recur(Vec<Value>),
     Quote(Expr),
     Ptr(*mut ()),
+
+    #[default]
     Nil,
+}
+
+impl Value {
+    /// Reads the values into S-Expressions again
+    pub fn readback(self) -> Term {
+        todo!()
+    }
 }
 
 #[derive(Debug, Hash, Clone, PartialEq, Eq)]
@@ -76,7 +85,7 @@ impl Keyword {
 }
 
 /// The environment in which evaluation takes place.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Environment {
     pub global: Value,
     pub expanded: bool,
@@ -260,7 +269,7 @@ fn apply_expand(apply: crate::Apply, environment: &Environment) -> Result<Value,
 
                 fun.call(environment, arguments).eval_into_result()
             }
-            None | Some(_) => Ok(Value::Apply {
+            _ => Ok(Value::Apply {
                 callee: Value::Keyword(Keyword::from(k.clone())).into(),
                 arguments: apply
                     .spine()?

@@ -6,6 +6,7 @@ use rustyline::{
     error::ReadlineError, validate::MatchingBracketValidator, Completer, Editor, Helper,
     Highlighter, Hinter, Validator,
 };
+use soft::{eval, Expr, Term};
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -48,6 +49,7 @@ fn get_history_path() -> Option<PathBuf> {
 
 pub fn repl() {
     let mut rl = Editor::new().expect("cannot create repl");
+    let environment = eval::Environment::default();
     let path = get_history_path();
     let h = InputValidator {
         brackets: MatchingBracketValidator::new(),
@@ -65,7 +67,15 @@ pub fn repl() {
         match rl.readline("> ") {
             Ok(line) => {
                 rl.add_history_entry(line.as_str()).unwrap();
-                println!("Line: {}", line)
+                let value = soft::parser::parse_sexpr(&line)
+                    .and_then(|sexpr| Expr::try_from(sexpr).map_err(|error| error.into()))
+                    .and_then(|expr| expr.expand(&environment))
+                    .and_then(|expr| expr.eval(&environment).eval_into_result());
+
+                match value {
+                    Ok(value) => println!("< {}", value.readback()),
+                    Err(error) => eprintln!("- {}", Term::from(error)),
+                }
             }
             Err(ReadlineError::Interrupted) => {
                 println!("Interrupted");

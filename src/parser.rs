@@ -1,6 +1,6 @@
 use std::{iter::Peekable, str::Chars};
 
-use crate::{SrcPos, Term};
+use crate::{SrcPos, Term, Expr, keyword};
 
 pub fn is_identifier_char(c: char) -> bool {
     c != ' ' && c != '\n' && c != '\t' && c != '(' && c != ')' && c != '"' && c != ';'
@@ -36,7 +36,7 @@ impl<'a> Parser<'a> {
         string
     }
 
-    pub fn parse(&mut self) -> Result<Term, String> {
+    pub fn parse(&mut self) -> Result<Term, Expr> {
         let start = self.index;
 
         let result = match self.peek() {
@@ -53,7 +53,7 @@ impl<'a> Parser<'a> {
                 let string = self.accumulate(|c| c != '"');
 
                 if self.bump() != Some('"') {
-                    return Err("expected '\"'".to_string());
+                    return Err(keyword!("parser.error/unexpected-quote"));
                 }
 
                 Ok(Term::String(string))
@@ -83,7 +83,7 @@ impl<'a> Parser<'a> {
                         Some(_) => {
                             terms.push(self.parse()?);
                         }
-                        None => return Err("unexpected end of file".to_string()),
+                        None => return Err(keyword!("parser.error/unexpected-end-of-file")),
                     }
                 }
 
@@ -93,7 +93,7 @@ impl<'a> Parser<'a> {
                 let string = self.accumulate(is_identifier_char);
                 Ok(Term::Identifier(string))
             }
-            None => Err("unexpected end of file".to_string()),
+            None => Err(keyword!("parser.error/unexpected-end-of-file")),
         }?;
 
         Ok(Term::SrcPos(
@@ -106,7 +106,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-pub fn parse_sexpr(string: &str) -> Result<Term, String> {
+pub fn parse_sexpr(string: &str) -> Result<Term, Expr> {
     let mut parser = Parser {
         peekable: string.chars().peekable(),
         string,
