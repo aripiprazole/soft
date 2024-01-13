@@ -6,7 +6,7 @@ use rustyline::{
     error::ReadlineError, validate::MatchingBracketValidator, Completer, Editor, Helper,
     Highlighter, Hinter, Validator,
 };
-use soft::{eval, Expr, Term};
+use soft::{eval::Environment, Expr, Term};
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -15,6 +15,9 @@ struct Args {
     /// Loads a file to use as input.
     #[arg(short, long)]
     load: Option<String>,
+
+    #[arg(short = 'X', long)]
+    exe: Option<String>,
 
     /// Starts a repl session.
     #[arg(short, long)]
@@ -33,9 +36,12 @@ fn main() -> miette::Result<()> {
 
     // Parse the command line arguments.
     let args = Args::parse();
-
+    let environment = Environment::default();
+    if let Some(expr) = args.exe {
+        exec(expr, &environment);
+    }
     if args.repl {
-        repl();
+        repl(&environment);
     }
 
     Ok(())
@@ -47,9 +53,20 @@ fn get_history_path() -> Option<PathBuf> {
     Some(PathBuf::from(path))
 }
 
-pub fn repl() {
+pub fn exec(content: String, environment: &Environment) {
+    let value = soft::parser::parse_sexpr(&content)
+        .and_then(|sexpr| Expr::try_from(sexpr).map_err(|error| error.into()))
+        .and_then(|expr| expr.expand(environment))
+        .and_then(|expr| expr.eval(environment).eval_into_result());
+
+    match value {
+        Ok(value) => println!("{}", value.readback()),
+        Err(error) => eprintln!("{}", Term::from(error)),
+    }
+}
+
+pub fn repl(environment: &Environment) {
     let mut rl = Editor::new().expect("cannot create repl");
-    let environment = eval::Environment::default();
     let path = get_history_path();
     let h = InputValidator {
         brackets: MatchingBracketValidator::new(),
@@ -67,15 +84,7 @@ pub fn repl() {
         match rl.readline("> ") {
             Ok(line) => {
                 rl.add_history_entry(line.as_str()).unwrap();
-                let value = soft::parser::parse_sexpr(&line)
-                    .and_then(|sexpr| Expr::try_from(sexpr).map_err(|error| error.into()))
-                    .and_then(|expr| expr.expand(&environment))
-                    .and_then(|expr| expr.eval(&environment).eval_into_result());
-
-                match value {
-                    Ok(value) => println!("< {}", value.readback()),
-                    Err(error) => eprintln!("- {}", Term::from(error)),
-                }
+                exec(line, environment)
             }
             Err(ReadlineError::Interrupted) => {
                 println!("Interrupted");
