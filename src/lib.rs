@@ -254,7 +254,9 @@ pub mod list {
 
     impl ExprKind for List {
         fn try_new(term: Term) -> Result<Option<Expr>> {
+            println!("podim");
             if let Term::Vec(ref vec) | Term::SrcPos(_, box Term::Vec(ref vec)) = term {
+                println!("pao de acucar");
                 let items = vec.clone().into();
                 return Ok(Some(List(term.transport(items)).into()));
             }
@@ -439,15 +441,15 @@ impl TryFrom<Term> for Expr {
     type Error = SemanticError;
 
     fn try_from(value: Term) -> Result<Self, Self::Error> {
-        DefMacro::try_new(value.clone())
-            .or_else(|_| Recur::try_new(value.clone()))
-            .or_else(|_| Def::try_new(value.clone()))
-            .or_else(|_| Fun::try_new(value.clone()))
-            .or_else(|_| Quote::try_new(value.clone()))
-            .or_else(|_| Apply::try_new(value.clone()))
-            .or_else(|_| List::try_new(value.clone()))
-            .or_else(|_| Literal::try_new(value.clone()))
-            .and_then(|value| value.ok_or(SemanticError::FailedToMatch))
+        try_expr!(DefMacro, value);
+        try_expr!(Def, value);
+        try_expr!(Recur, value);
+        try_expr!(Fun, value);
+        try_expr!(Quote, value);
+        try_expr!(Apply, value);
+        try_expr!(List, value);
+        try_expr!(Literal, value);
+        Err(SemanticError::FailedToMatch)
     }
 }
 
@@ -473,6 +475,15 @@ impl From<Vec<Term>> for Term {
     fn from(terms: Vec<Term>) -> Self {
         Term::List(terms)
     }
+}
+
+#[macro_export]
+macro_rules! try_expr {
+    ($name:ident, $value:expr) => {
+        if let Ok(Some(value)) = $name::try_new($value.clone()) {
+            return Ok(value);
+        }
+    };
 }
 
 #[macro_export]
