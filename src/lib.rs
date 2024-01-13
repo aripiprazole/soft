@@ -62,6 +62,9 @@ pub enum SemanticError {
     #[error("invalid expression")]
     InvalidExpression,
 
+    #[error("failed to match equivalent expression")]
+    FailedToMatch,
+
     #[error("invalid list")]
     InvalidList,
 
@@ -108,6 +111,7 @@ impl From<SemanticError> for Expr {
     fn from(value: SemanticError) -> Self {
         match value {
             SemanticError::InvalidExpression => keyword!("error/invalid-expression"),
+            SemanticError::FailedToMatch => keyword!("error/failed-to-match"),
             SemanticError::InvalidList => keyword!("error/invalid-list"),
             SemanticError::InvalidArguments => keyword!("error/invalid-arguments"),
             SemanticError::MissingParameters => keyword!("error/missing-parameters"),
@@ -442,8 +446,8 @@ impl TryFrom<Term> for Expr {
             .or_else(|_| Quote::try_new(value.clone()))
             .or_else(|_| Apply::try_new(value.clone()))
             .or_else(|_| List::try_new(value.clone()))
-            .or_else(|_| Literal::try_new(value.clone()))?
-            .ok_or(SemanticError::InvalidExpression)
+            .or_else(|_| Literal::try_new(value.clone()))
+            .and_then(|value| value.ok_or(SemanticError::FailedToMatch))
     }
 }
 
